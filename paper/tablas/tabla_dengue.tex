@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering\caption{Dengue: error en prueba (2021-2025) y en validación (2017-2020). Media $\pm$ d.e. de 5 semillas; MAE y RMSE en casos por provincia y semana, promedio de los 8 horizontes; F1 de alerta a 4 semanas.}\label{tab:dengue}
+\setlength{\tabcolsep}{2.3pt}\footnotesize
+\begin{tabular}{lccccc}
+\toprule
+Modelo & MAE val. & MAE & RMSE & MAE log & F1 \\
+\midrule
+Persistencia & 17.1 & 38.5 & 171.7 & 0.647 & 0.807 \\
+Canal endémico & 25.3 & 56.0 & 218.1 & 1.634 & 0.008 \\
+ARIMA + Fourier & 12.7 & 34.5 & 161.6 & 0.646 & 0.757 \\
+Random forest & 11.3 & 29.9{\tiny$\,\pm$0.2} & 149.3{\tiny$\,\pm$0.7} & 0.612{\tiny$\,\pm$0.001} & 0.803{\tiny$\,\pm$0.003} \\
+\midrule
+LSTM & 11.1{\tiny$\,\pm$0.8} & 31.8{\tiny$\,\pm$0.8} & 157.0{\tiny$\,\pm$6.5} & \textbf{0.605{\tiny$\,\pm$0.011}} & \textbf{0.809{\tiny$\,\pm$0.007}} \\
+GRU & 11.1{\tiny$\,\pm$0.5} & 31.7{\tiny$\,\pm$0.9} & 151.9{\tiny$\,\pm$4.9} & 0.619{\tiny$\,\pm$0.012} & 0.806{\tiny$\,\pm$0.007} \\
+Transformer & \textbf{10.9{\tiny$\,\pm$0.5}} & \textbf{29.8{\tiny$\,\pm$0.9}} & \textbf{147.8{\tiny$\,\pm$5.0}} & 0.607{\tiny$\,\pm$0.022} & 0.808{\tiny$\,\pm$0.008} \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,9 @@
+# Normaliza los finales de línea (Windows / Linux / Colab)
+* text=auto eol=lf
+
+# Archivos binarios: Git no los toca
+*.pt    binary
+*.pdf   binary
+*.xlsx  binary
+*.png   binary
+*.zip   binary

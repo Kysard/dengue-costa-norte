@@ -1,0 +1,47 @@
+{
+  "generado_en_navegador": "2026-10-28T04:12:04.126Z",
+  "nota": "Archivos agregados en el navegador a partir de las fuentes oficiales; el notebook reproduce la misma agregacion desde los CSV originales.",
+  "fuentes": {
+    "dengue": {
+      "url": "https://www.datosabiertos.gob.pe/sites/default/files/datos_abiertos_vigilancia_dengue_2000_2025_0.csv",
+      "dataset": "https://www.datosabiertos.gob.pe/dataset/vigilancia-epidemiol%C3%B3gica-de-dengue",
+      "licencia": "Open Data Commons Attribution License (ODC-By)",
+      "fecha_modificada_portal": "2026-10-21",
+      "bytes": 117866478,
+      "sha256": "7865e8b2f5a7aef1e8dce159444891f2c2e59b311d574f28c55aaca5a9abb8ba"
+    },
+    "eda": {
+      "url": "https://www.datosabiertos.gob.pe/sites/default/files/datos_abiertos_vigilancia_edas_2000_2025.csv",
+      "dataset": "https://www.datosabiertos.gob.pe/dataset/vigilancia-epidemiol%C3%B3gica-de-enfermedad-diarreica-aguda-eda",
+      "licencia": "Open Data Commons Attribution License (ODC-By)",
+      "fecha_modificada_portal": "2026-10-21",
+      "bytes": 115768601,
+      "sha256": "4acbc7ba0b5d2d6b7d36fb06297e19890abece7ea94b09f4722bca32e87ead19"
+    },
+    "clima": {
+      "api": "https://power.larc.nasa.gov/api/temporal/daily/point",
+      "parametros": "T2M,T2M_MAX,T2M_MIN,PRECTOTCORR,RH2M",
+      "comunidad": "AG",
+      "periodo": "19990101-20251231",
+      "fuente": "NASA POWER (MERRA-2)"
+    }
+  },
+  "archivos": {
+    "dengue_provincia_semana_peru_2000_2025.csv": {
+      "filas": 58250,
+      "bytes": 2282666
+    },
+    "eda_provincia_semana_costanorte_2000_2025.csv": {
+      "filas": 18948,
+      "bytes": 830974
+    },
+    "eda_departamento_semana_peru_2000_2025.csv": {
+      "filas": 33937,
+      "bytes": 1182587
+    },
+    "clima_nasa_power_diario_costanorte_1999_2025.csv": {
+      "filas": 138068,
+      "bytes": 11138917
+    }
+  }
+}

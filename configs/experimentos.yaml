@@ -1,0 +1,30 @@
+# Hiperparámetros de todos los experimentos (los mismos para dengue y EDA)
+datos:
+  L: 26            # semanas de historia que ve el modelo
+  H: 8             # semanas que pronostica
+  # partición temporal (ver src/datos.py): train 2000-2016, validación 2017-2020, prueba 2021-2025
+entrenamiento:
+  epocas: 60
+  paciencia: 8     # parada temprana con la pérdida de validación
+  lr: 0.001
+  lote: 256
+  peso_decay: 0.0001
+semillas: [0, 1, 2, 3, 4]
+modelos:
+  lstm:        {oculto: 64, capas: 2, dropout: 0.2}
+  gru:         {oculto: 64, capas: 2, dropout: 0.2}
+  transformer: {d: 64, cabezas: 4, capas: 2, dropout: 0.1}
+ablaciones:        # se hacen sobre la LSTM
+  completo:     {clima: true,  enso: true,  residual: true}
+  sin_clima:    {clima: false, enso: true,  residual: true}
+  sin_enso:     {clima: true,  enso: false, residual: true}
+  solo_casos:   {clima: false, enso: false, residual: true}
+  sin_residual: {clima: true,  enso: true,  residual: false}
+random_forest:
+  arboles: 200
+alerta:
+  percentil: 90    # umbral = percentil 90 de los 5 años previos
+  horizonte: 4     # se evalúa la alerta con 4 semanas de anticipación
+abastecimiento:
+  lead: 4          # semanas entre el pedido y la llegada al establecimiento
+  z: 1.65          # stock de seguridad para ~95 % de nivel de servicio

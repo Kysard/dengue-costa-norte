@@ -1,0 +1,9 @@
+\begin{table}[t]\centering\caption{Ablación de la LSTM para dengue (5 semillas, misma partición). El modelo completo usa casos, estacionalidad, clima y El Niño con conexión residual.}\label{tab:ablacion}
+\setlength{\tabcolsep}{3pt}\footnotesize\begin{tabular}{lcccc}\toprule
+Variante & MAE val. & MAE & RMSE & F1 \\\midrule
+Completo & 11.1{\tiny$\,\pm$0.8} & 31.8{\tiny$\,\pm$0.8} & 157.0{\tiny$\,\pm$6.5} & 0.809 \\
+Sin clima & 11.7{\tiny$\,\pm$0.6} & 32.0{\tiny$\,\pm$0.9} & 161.6{\tiny$\,\pm$5.0} & 0.819 \\
+Sin El Niño & 11.1{\tiny$\,\pm$0.6} & 30.5{\tiny$\,\pm$1.2} & 146.6{\tiny$\,\pm$8.8} & 0.808 \\
+Solo casos y estación & 11.2{\tiny$\,\pm$0.4} & 30.4{\tiny$\,\pm$0.6} & 153.5{\tiny$\,\pm$2.1} & 0.826 \\
+Sin conexión residual & 14.6{\tiny$\,\pm$0.8} & 40.4{\tiny$\,\pm$1.1} & 192.3{\tiny$\,\pm$4.2} & 0.739 \\
+\bottomrule\end{tabular}\end{table}

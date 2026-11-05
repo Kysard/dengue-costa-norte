@@ -1,0 +1,1220 @@
+<title>Pronosticador Dengue Costa Norte</title>
+<meta name="description" content="Pronóstico semanal de dengue y EDA por provincia en Tumbes, Piura y Lambayeque con LSTM, GRU y Transformer, escenarios de clima y cálculo de pedidos de medicamentos">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+<script>window.Chart || document.write('<script src="lib/chart.umd.js"><\/script>')</script>
+<style>
+/* Concepto: tablero de vigilancia y abastecimiento. Panel de control a la izquierda, pronóstico a la derecha.
+   Azul marino del Pacífico para el encabezado, verde azulado para el pronóstico y colores del canal endémico
+   (éxito, seguridad, alarma, epidemia) solo para el estado de cada semana. */
+:root {
+  --bg: #eef3f4; --surface: #ffffff; --surface-2: #f4f8f9; --line: #d6e0e3;
+  --ink: #0f2430; --ink-2: #44606b; --muted: #6f848c;
+  --marine: #0b3442; --marine-2: #12495a; --marine-ink: #e6f1f4; --marine-mute: #9cc0ca;
+  --accent: #0e7c86; --accent-2: #0a5f67; --accent-soft: #d7eef0;
+  --obs: #1f2b30; --real: #8a7f74; --edit: #e07a1f; --sim: #7a4fc9; --sim-bg: #efe8fb;
+  --z-exito: #4f9d55; --z-seg: #c9a516; --z-alarma: #e0832b; --z-epi: #d1443c;
+  --z-exito-bg: #e3f2e4; --z-seg-bg: #fbf1c9; --z-alarma-bg: #fde5cf; --z-epi-bg: #fadad7;
+  --g1: #6250d6; --g2: #d1679a; --g3: #d99400; --g4: #2a78d6;
+  --m-0: #1d5566; --m-1: #2c7a87; --m-2: #4fa8b1; --m-3: #94d3d8; --m-4: #e9f8f8;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Sans 3", "Segoe UI", Roboto, Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b171d; --surface: #12232b; --surface-2: #172c35; --line: #25414c;
+  --ink: #e5eef1; --ink-2: #a9c0c8; --muted: #84a0a9;
+  --marine: #081f28; --marine-2: #0e3240; --marine-ink: #e6f1f4; --marine-mute: #8fb4bf;
+  --accent: #3fb3bd; --accent-2: #66c9d1; --accent-soft: #163d44;
+  --obs: #e5eef1; --real: #b7aa9c; --edit: #f0a058; --sim: #b294f0; --sim-bg: #2a2145;
+  --z-exito: #63b569; --z-seg: #d8b738; --z-alarma: #ec9a4c; --z-epi: #e8665e;
+  --z-exito-bg: #1d3a22; --z-seg-bg: #3b3313; --z-alarma-bg: #42290f; --z-epi-bg: #44201d;
+  --g1: #9085e9; --g2: #e58ab4; --g3: #e6a92a; --g4: #4f95ea; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0b171d; --surface: #12232b; --surface-2: #172c35; --line: #25414c;
+  --ink: #e5eef1; --ink-2: #a9c0c8; --muted: #84a0a9;
+  --marine: #081f28; --marine-2: #0e3240; --marine-ink: #e6f1f4; --marine-mute: #8fb4bf;
+  --accent: #3fb3bd; --accent-2: #66c9d1; --accent-soft: #163d44;
+  --obs: #e5eef1; --real: #b7aa9c; --edit: #f0a058; --sim: #b294f0; --sim-bg: #2a2145;
+  --z-exito: #63b569; --z-seg: #d8b738; --z-alarma: #ec9a4c; --z-epi: #e8665e;
+  --z-exito-bg: #1d3a22; --z-seg-bg: #3b3313; --z-alarma-bg: #42290f; --z-epi-bg: #44201d;
+  --g1: #9085e9; --g2: #e58ab4; --g3: #e6a92a; --g4: #4f95ea; color-scheme: dark }
+
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+html { scroll-behavior: smooth }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15.5px; line-height: 1.5; margin: 0 }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em }
+h2 { font-size: clamp(1.35rem, 2.2vw, 1.75rem); font-weight: 700 }
+h3 { font-size: 1rem; font-weight: 600 }
+p { margin: 0 }
+a { color: var(--accent) }
+.envoltura { max-width: 1280px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+.etiqueta { font-family: var(--f-display); font-size: .72rem; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted) }
+.nota { color: var(--muted); font-size: .86rem }
+
+.banda { background: linear-gradient(160deg, var(--marine) 0%, var(--marine-2) 100%); color: var(--marine-ink) }
+.banda .envoltura { padding-block: 26px 24px; display: flex; flex-wrap: wrap; gap: 14px 40px; align-items: flex-end; justify-content: space-between }
+.banda .etiqueta { color: var(--marine-mute) }
+.banda h1 { font-size: clamp(1.7rem, 3.4vw, 2.5rem); font-weight: 800; line-height: 1.08; margin-top: 8px }
+.banda h1 em { font-style: normal; color: #7fd3da }
+.banda .bajada { color: var(--marine-mute); margin-top: 8px; max-width: 70ch }
+.datos-cabecera { display: flex; gap: 28px; flex-wrap: wrap }
+.datos-cabecera div { border-left: 2px solid rgba(255,255,255,.18); padding-left: 12px }
+.datos-cabecera b { display: block; font-family: var(--f-display); font-size: 1.25rem; color: #fff; font-variant-numeric: tabular-nums }
+.datos-cabecera span { font-size: .82rem; color: var(--marine-mute) }
+
+nav.pestanas { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line) }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--surface) }
+nav.pestanas .envoltura { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; align-items: center }
+nav.pestanas a { font-family: var(--f-display); font-weight: 600; font-size: .88rem; color: var(--ink-2); text-decoration: none; padding: 13px 12px; white-space: nowrap; border-bottom: 2px solid transparent }
+nav.pestanas a:hover, nav.pestanas a.activo { color: var(--ink); border-bottom-color: var(--accent) }
+.estado-calc { margin-left: auto; font-size: .82rem; color: var(--muted); white-space: nowrap; padding-left: 12px }
+.estado-calc.ocupado { color: var(--accent) }
+
+main { padding-block: 22px 40px }
+section { scroll-margin-top: 60px }
+.grid-app { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 18px; align-items: start }
+.panel { position: sticky; top: 58px; max-height: calc(100vh - 70px); overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 16px; scrollbar-width: thin }
+.grupo { display: grid; gap: 8px }
+.grupo + .grupo { border-top: 1px solid var(--line); padding-top: 14px }
+.grupo > .etiqueta { display: flex; justify-content: space-between; align-items: baseline; gap: 8px }
+.fila-ctrl { display: grid; gap: 4px }
+.fila-ctrl label { font-size: .86rem; color: var(--ink-2); display: flex; justify-content: space-between; gap: 8px }
+.fila-ctrl label b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); font-size: .84rem; text-align: right }
+select, input[type="number"] { font: inherit; font-size: .92rem; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; min-width: 0; width: 100% }
+input[type="range"] { accent-color: var(--accent); width: 100% }
+select:focus-visible, input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+.segmento { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden }
+.segmento button { font: inherit; font-size: .84rem; font-weight: 600; background: var(--surface); color: var(--ink-2); border: 0; padding: 7px 6px; cursor: pointer }
+.segmento button + button { border-left: 1px solid var(--line) }
+.segmento button[aria-pressed="true"] { background: var(--accent); color: #fff }
+.chips { display: flex; flex-wrap: wrap; gap: 6px }
+.chip { font: inherit; font-size: .8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); cursor: pointer }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-2) }
+.dos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+.boton { font: inherit; font-weight: 600; font-size: .9rem; border-radius: 8px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: #fff; display: inline-flex; gap: 8px; align-items: center; justify-content: center }
+.boton.sec { background: var(--surface); color: var(--accent-2) }
+.boton.peligro { background: var(--surface); color: var(--z-epi); border-color: var(--z-epi) }
+.boton:disabled { opacity: .5; cursor: not-allowed }
+.ayuda { font-size: .8rem; color: var(--muted); line-height: 1.4 }
+.aviso { font-size: .82rem; border-radius: 8px; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-2) }
+.aviso.amarillo { background: var(--z-seg-bg); border-color: var(--z-seg); color: var(--ink) }
+
+.columna { display: grid; gap: 18px; min-width: 0 }
+.tarjeta { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-width: 0 }
+.cab-tarjeta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 10px }
+.cab-tarjeta .sub { color: var(--muted); font-size: .88rem; margin-top: 2px; max-width: 72ch }
+.acciones { display: flex; gap: 8px; flex-wrap: wrap }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; min-width: 0 }
+.kpi .v { font-family: var(--f-display); font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; margin-top: 4px }
+.kpi .t { color: var(--muted); font-size: .84rem; line-height: 1.3; margin-top: 2px }
+.frase { font-size: 1rem; color: var(--ink-2); background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px 14px }
+.frase b { color: var(--ink) }
+.lienzo { position: relative; height: 380px; margin-top: 12px }
+.leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .82rem; color: var(--ink-2); margin-top: 10px }
+.leyenda i { display: inline-block; width: 22px; height: 0; border-top: 2.5px solid var(--c); vertical-align: middle; margin-right: 6px }
+.leyenda i.punteada { border-top-style: dashed }
+.leyenda i.banda { height: 10px; border: 0; background: var(--c); opacity: .35; border-radius: 2px }
+
+.tabla-caja { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: .9rem }
+th { font-family: var(--f-display); font-weight: 600; font-size: .74rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); text-align: right; padding: 7px 9px; border-bottom: 1px solid var(--line); white-space: nowrap }
+th:first-child, td:first-child { text-align: left }
+td { padding: 7px 9px; border-bottom: 1px solid var(--line); text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap }
+td.txt { font-family: var(--f-body) }
+tr.total td { font-weight: 600; border-top: 2px solid var(--line) }
+tr.clic { cursor: pointer }
+tr.clic:hover td, tr.sel td { background: var(--accent-soft) }
+td input[type="number"] { width: 84px; text-align: right; font-family: var(--f-mono); padding: 4px 6px }
+.zona { display: inline-block; font-family: var(--f-body); font-size: .74rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--zc); background: var(--zb); color: var(--ink) }
+
+.mapa-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 18px; align-items: start }
+.mapa-caja { background: linear-gradient(160deg, var(--marine) 0%, var(--marine-2) 100%); border-radius: var(--r); padding: 14px; display: grid; gap: 8px; justify-items: center }
+.mapa-caja svg { width: 100%; max-width: 380px; height: auto }
+.mapa-caja path.obj { cursor: pointer; stroke: var(--marine); stroke-width: .8 }
+.mapa-caja path.obj:hover, .mapa-caja path.obj.sel { stroke: #ffd166; stroke-width: 2.2 }
+.mapa-caja path.ctx { fill: rgba(255,255,255,.08); stroke: rgba(255,255,255,.12); stroke-width: .6 }
+.mapa-caja text { font-family: var(--f-display); pointer-events: none }
+.leyenda-mapa { display: flex; align-items: center; gap: 6px; font-size: .76rem; color: var(--marine-mute); flex-wrap: wrap; justify-content: center }
+.leyenda-mapa i { width: 20px; height: 10px; display: inline-block; border-radius: 2px }
+.tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--surface); padding: 6px 10px; border-radius: 6px; font-size: .82rem; z-index: 50; opacity: 0; transition: opacity .12s; max-width: 260px }
+
+.pedido-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start }
+.cifra { font-family: var(--f-display); font-size: 2.1rem; font-weight: 800; color: var(--accent-2); font-variant-numeric: tabular-nums }
+.vacio { color: var(--muted); font-size: .92rem; padding: 18px; text-align: center; border: 1px dashed var(--line); border-radius: 8px }
+.copiado { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 8px 14px; border-radius: 8px; font-size: .9rem; opacity: 0; transition: opacity .2s; z-index: 60; pointer-events: none }
+textarea.respaldo { width: 100%; height: 120px; font-family: var(--f-mono); font-size: .8rem; margin-top: 10px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px }
+.sim-barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px }
+.sim-barra .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px }
+.boton.sim { background: var(--sim); border-color: var(--sim) }
+.boton.sim.sec { background: var(--surface); color: var(--sim) }
+.sim-estado { margin-top: 12px; font-size: .9rem; color: var(--ink-2); background: var(--sim-bg); border: 1px solid var(--sim); border-radius: 8px; padding: 9px 12px }
+.sim-estado b { color: var(--ink) }
+.caja-scroll { max-height: 340px; overflow: auto; margin-top: 12px; border: 1px solid var(--line); border-radius: 8px }
+.caja-scroll table th { position: sticky; top: 0; background: var(--surface); z-index: 1 }
+.fuente { display: inline-block; font-family: var(--f-body); font-size: .74rem; font-weight: 700; padding: 2px 8px; border-radius: 999px }
+.fuente.cdc { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line) }
+.fuente.sim { background: var(--sim-bg); color: var(--sim); border: 1px solid var(--sim) }
+.fuente.ed { background: var(--z-alarma-bg); color: var(--edit); border: 1px solid var(--edit) }
+.lienzo.bajo { height: 300px }
+.metodo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px }
+.metodo ul { margin: 8px 0 0; padding-left: 18px; color: var(--ink-2); font-size: .92rem; display: grid; gap: 6px }
+.titulo-sec { display: grid; gap: 6px; margin-bottom: 14px }
+footer { border-top: 1px solid var(--line); background: var(--surface) }
+footer .envoltura { padding-block: 18px; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; color: var(--muted); font-size: .86rem }
+
+@media (max-width: 1060px) {
+  .grid-app { grid-template-columns: minmax(0, 1fr) }
+  .panel { position: static; max-height: none }
+  .mapa-grid, .pedido-grid, .metodo { grid-template-columns: minmax(0, 1fr) }
+}
+@media (max-width: 640px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .lienzo { height: 300px }
+  .datos-cabecera { gap: 16px }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important } }
+</style>
+
+<header class="banda">
+  <div class="envoltura">
+    <div>
+      <div class="etiqueta">Grupo 5 · MIA-203 Redes Neuronales y Aprendizaje Profundo · UNI FIIS</div>
+      <h1>Pronosticador de <em>dengue</em> y EDA en la costa norte</h1>
+      <p class="bajada">Elige una provincia, cuántas semanas quieres mirar hacia adelante y cómo vendrá el clima. Las redes LSTM, GRU y Transformer que entrenamos con los datos del CDC Perú (2000-2025) calculan los casos esperados y cuántos medicamentos conviene enviar.</p>
+    </div>
+    <div class="datos-cabecera" id="cabecera"></div>
+  </div>
+</header>
+
+<nav class="pestanas" aria-label="Secciones">
+  <div class="envoltura">
+    <a href="#pronostico">Pronóstico</a>
+    <a href="#mapa">Mapa de riesgo</a>
+    <a href="#pedido">Pedido de medicamentos</a>
+    <a href="#guardados">Pronósticos guardados</a>
+    <a href="#confiabilidad">¿Qué tan confiable es?</a>
+    <a href="#metodo">Cómo funciona</a>
+    <span class="estado-calc" id="estado-calc" role="status" aria-live="polite"></span>
+  </div>
+</nav>
+
+<main class="envoltura">
+<section id="pronostico" class="grid-app">
+  <aside class="panel" aria-label="Opciones del pronóstico">
+    <div class="grupo">
+      <div class="etiqueta">Qué pronosticar</div>
+      <div class="segmento" id="seg-enf">
+        <button type="button" data-v="dengue" aria-pressed="true">Dengue</button>
+        <button type="button" data-v="eda" aria-pressed="false">EDA &lt; 5 años</button>
+      </div>
+      <div class="fila-ctrl"><label for="sel-prov">Provincia</label><select id="sel-prov"></select></div>
+      <div class="fila-ctrl"><label>Modelo</label>
+        <div class="segmento" id="seg-arq">
+          <button type="button" data-v="lstm" aria-pressed="true">LSTM</button>
+          <button type="button" data-v="gru" aria-pressed="false">GRU</button>
+          <button type="button" data-v="transformer" aria-pressed="false">Transf.</button>
+          <button type="button" data-v="promedio" aria-pressed="false">Las 3</button>
+        </div>
+        <span class="ayuda">Cada modelo es el promedio de 5 redes entrenadas con semillas distintas.</span>
+      </div>
+    </div>
+
+    <div class="grupo">
+      <div class="etiqueta">Desde cuándo y hasta cuándo</div>
+      <div class="segmento" id="seg-origen">
+        <button type="button" data-v="ultimo" aria-pressed="true" id="btn-ultimo">Último dato</button>
+        <button type="button" data-v="fecha" aria-pressed="false">Otra fecha</button>
+      </div>
+      <div class="dos" id="caja-fecha" hidden>
+        <div class="fila-ctrl"><label for="sel-anio">Año</label><select id="sel-anio"></select></div>
+        <div class="fila-ctrl"><label for="sel-sem">Semana</label><select id="sel-sem"></select></div>
+      </div>
+      <div class="aviso" id="aviso-origen"></div>
+      <div class="fila-ctrl"><label for="rng-h">Semanas a pronosticar <b id="val-h"></b></label>
+        <input type="range" id="rng-h" min="1" max="26" step="1" value="8">
+        <span class="ayuda" id="ayuda-h"></span>
+      </div>
+    </div>
+
+    <div class="grupo">
+      <div class="etiqueta">Escenario <button type="button" class="chip" id="btn-reset" style="font-size:.72rem">Restablecer</button></div>
+      <div class="chips" id="presets"></div>
+      <div class="fila-ctrl"><label for="rng-dt">Temperatura vs. lo normal <b id="val-dt"></b></label>
+        <input type="range" id="rng-dt" min="-2" max="3" step="0.5" value="0"></div>
+      <div class="fila-ctrl"><label for="rng-ll">Lluvia vs. lo normal <b id="val-ll"></b></label>
+        <input type="range" id="rng-ll" min="0" max="400" step="10" value="100"></div>
+      <div class="fila-ctrl"><label for="rng-n12">Anomalía del mar, Niño 1+2 <b id="val-n12"></b></label>
+        <input type="range" id="rng-n12" min="-2" max="5" step="0.25" value="0"></div>
+      <div class="fila-ctrl"><label for="rng-oni">Índice ONI (Pacífico central) <b id="val-oni"></b></label>
+        <input type="range" id="rng-oni" min="-2.5" max="3" step="0.25" value="0"></div>
+      <div class="fila-ctrl"><label for="sel-k">Aplicar a las últimas semanas observadas</label>
+        <select id="sel-k"><option value="0">Ninguna (solo semanas futuras)</option><option value="4">Últimas 4 semanas</option><option value="8" selected>Últimas 8 semanas</option><option value="12">Últimas 12 semanas</option><option value="26">Las 26 semanas que mira el modelo</option></select>
+      </div>
+      <p class="ayuda">El modelo mira las últimas 26 semanas. El escenario cambia el clima de las semanas recientes, como si ya estuviera pasando, y el de las semanas futuras que usa cuando pronostica más de 8 semanas. Si casi no hay casos recientes, el clima solo no alcanza para que el modelo prevea un brote: prueba también escribir casos en «Últimas semanas observadas».</p>
+    </div>
+  </aside>
+
+  <div class="columna">
+    <div class="kpis" id="kpis"></div>
+    <p class="frase" id="frase"></p>
+    <div class="tarjeta">
+      <div class="cab-tarjeta">
+        <div><h3 id="tit-graf">Casos por semana</h3><div class="sub" id="sub-graf"></div></div>
+        <div class="acciones">
+          <button type="button" class="boton" id="btn-guardar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg>Guardar pronóstico</button>
+          <button type="button" class="boton sec" id="btn-copiar-semanas">Copiar tabla</button>
+        </div>
+      </div>
+      <div class="lienzo"><canvas id="g-pron" aria-label="Casos observados y pronosticados"></canvas></div>
+      <div class="leyenda" id="leyenda-graf"></div>
+    </div>
+    <div class="tarjeta" id="caja-sim">
+      <div class="cab-tarjeta">
+        <div><h3>Avanzar en el tiempo</h3><div class="sub">Agrega el pronóstico al historial como si esas semanas ya hubieran pasado y el modelo vuelve a pronosticar desde ahí. En cada paso puedes cambiar el escenario o corregir los casos en «Últimas semanas observadas». Se aplica a las 14 provincias a la vez.</div></div>
+      </div>
+      <div class="sim-barra">
+        <button type="button" class="boton sim" id="btn-av1">Agregar 1 semana</button>
+        <button type="button" class="boton sim sec" id="btn-av4">Agregar 4 semanas</button>
+        <button type="button" class="boton sim sec" id="btn-avh">Agregar todo el pronóstico</button>
+        <button type="button" class="boton sim sec" id="btn-auto" aria-pressed="false">▶ Avanzar solo</button>
+        <span class="sep" aria-hidden="true"></span>
+        <button type="button" class="boton sec" id="btn-deshacer">Deshacer último paso</button>
+        <button type="button" class="boton peligro" id="btn-reiniciar">Volver al dato real</button>
+        <button type="button" class="boton sec" id="btn-copiar-sim">Copiar historial</button>
+      </div>
+      <div class="sim-estado" id="sim-estado"></div>
+      <div class="caja-scroll" id="caja-tab-sim"><table id="tab-sim"></table></div>
+    </div>
+    <div class="tarjeta">
+      <div class="cab-tarjeta"><div><h3>Semana a semana</h3><div class="sub">Zona según el canal endémico: cuartiles de la misma semana en los 5 años anteriores, como en las salas situacionales del MINSA.</div></div></div>
+      <div class="tabla-caja" style="margin-top:10px"><table id="tab-semanas"></table></div>
+    </div>
+    <div class="tarjeta" id="caja-editor">
+      <div class="cab-tarjeta">
+        <div><h3>Últimas semanas observadas</h3><div class="sub">Cambia los casos para probar qué pasaría si empezara un brote. Lo que escribas reemplaza el dato (del CDC o simulado) en el pronóstico y en el historial simulado.</div></div>
+        <button type="button" class="boton sec" id="btn-reset-ed">Volver a los datos reales</button>
+      </div>
+      <div class="tabla-caja" style="margin-top:10px"><table id="tab-editor"></table></div>
+    </div>
+  </div>
+</section>
+
+<section id="mapa" style="margin-top:34px">
+  <div class="titulo-sec"><div class="etiqueta">Mapa de riesgo</div><h2 id="tit-mapa">Las 14 provincias con el mismo escenario</h2>
+    <p class="nota" id="sub-mapa"></p></div>
+  <div class="mapa-grid">
+    <div class="mapa-caja"><div id="mapa-svg" style="width:100%;display:flex;justify-content:center"></div><div class="leyenda-mapa" id="leyenda-mapa"></div></div>
+    <div class="tarjeta"><h3>Ranking de provincias</h3><p class="nota">Haz clic en una fila o en el mapa para verla en el pronóstico.</p>
+      <div class="tabla-caja" style="margin-top:10px"><table id="tab-ranking"></table></div></div>
+  </div>
+</section>
+
+<section id="pedido" style="margin-top:34px">
+  <div class="titulo-sec"><div class="etiqueta">Pedido de medicamentos</div><h2>¿Cuánto enviar a cada provincia?</h2>
+    <p class="nota">Política de stock base: se pide lo pronosticado para el tiempo de entrega más un stock de seguridad, menos lo que ya hay en el almacén y en camino. El stock de seguridad sale del error que tuvo el modelo en validación (2017-2020); como ese error es proporcional, crece cuando se esperan más casos. Un tratamiento es lo que necesita un caso.</p></div>
+  <div class="tarjeta">
+      <div class="dos" style="max-width:520px">
+        <div class="fila-ctrl"><label for="rng-lead">Tiempo de entrega <b id="val-lead"></b></label><input type="range" id="rng-lead" min="1" max="8" step="1" value="4"></div>
+        <div class="fila-ctrl"><label for="sel-z">Nivel de servicio</label><select id="sel-z"><option value="0.84">80 %</option><option value="1.28">90 %</option><option value="1.65" selected>95 %</option><option value="2.33">99 %</option></select></div>
+      </div>
+      <div class="tabla-caja" style="margin-top:14px"><table id="tab-plan"></table></div>
+      <p class="ayuda" style="margin-top:8px">Escribe el stock actual y lo que está en camino de cada provincia; el pedido se recalcula al momento.</p>
+  </div>
+  <div class="pedido-grid" style="margin-top:18px">
+    <div class="tarjeta">
+      <div class="etiqueta" id="et-pedido">Pedido sugerido</div>
+      <div class="cifra" id="cifra-pedido">0</div>
+      <p class="nota" id="nota-pedido"></p>
+      <div class="tabla-caja" style="margin-top:12px"><table id="tab-meds"></table></div>
+    </div>
+    <div class="tarjeta">
+      <h3>Kit de medicamentos por caso</h3>
+      <div class="tabla-caja" style="margin-top:10px"><table id="tab-kit"></table></div>
+      <p class="ayuda" style="margin-top:8px">Las cantidades por caso son supuestos del equipo, a validar con la guía clínica del MINSA (RM 071-2017). El reparto por gravedad usa lo observado en cada provincia desde 2015.</p>
+    </div>
+  </div>
+</section>
+
+<section id="guardados" style="margin-top:34px">
+  <div class="titulo-sec"><div class="etiqueta">Pronósticos guardados</div><h2>Compara escenarios</h2>
+    <p class="nota">Cada vez que guardas, el pronóstico queda registrado en este navegador. Marca «Ver» para dibujarlo encima del gráfico y compararlo semana a semana más abajo, o cópialos para pegarlos en Excel.</p></div>
+  <div class="tarjeta">
+    <div class="acciones" style="margin-bottom:12px">
+      <button type="button" class="boton sec" id="btn-copiar-guardados">Copiar todo para Excel</button>
+      <button type="button" class="boton peligro" id="btn-borrar">Borrar todos</button>
+    </div>
+    <div id="lista-guardados"></div>
+    <div id="respaldo"></div>
+  </div>
+  <div class="tarjeta" style="margin-top:18px">
+    <div class="cab-tarjeta">
+      <div><h3>Comparación semana a semana</h3><div class="sub">Casos esperados por semana de los pronósticos marcados con «Ver», uno al lado del otro. La última columna es la diferencia entre el más alto y el más bajo.</div></div>
+      <button type="button" class="boton sec" id="btn-copiar-comp">Copiar comparación</button>
+    </div>
+    <div class="caja-scroll" style="max-height:420px"><table id="tab-comp"></table></div>
+  </div>
+  <div class="tarjeta" style="margin-top:18px">
+    <div class="cab-tarjeta">
+      <div><h3 id="tit-esc">Los 6 escenarios de una vez</h3><div class="sub" id="sub-esc">Calcula el mismo pronóstico con cada escenario del panel (misma provincia, modelo, fecha y semanas) para ver cuánto cambia.</div></div>
+      <div class="acciones">
+        <button type="button" class="boton" id="btn-esc">Calcular los 6 escenarios</button>
+        <button type="button" class="boton sec" id="btn-esc-guardar" disabled>Guardar los 6</button>
+      </div>
+    </div>
+    <div id="caja-esc" hidden>
+      <div class="lienzo bajo"><canvas id="g-esc" aria-label="Pronóstico con cada escenario"></canvas></div>
+      <div class="leyenda" id="leyenda-esc"></div>
+      <div class="tabla-caja" style="margin-top:12px"><table id="tab-esc"></table></div>
+    </div>
+  </div>
+</section>
+
+<section id="confiabilidad" style="margin-top:34px">
+  <div class="titulo-sec"><div class="etiqueta">¿Qué tan confiable es?</div><h2>Error del modelo en datos que nunca vio</h2>
+    <p class="nota">Error absoluto medio (casos por provincia y semana) en el periodo de prueba 2021-2025, según cuántas semanas antes se hizo el pronóstico. Para comprobarlo con una fecha concreta, elige "Otra fecha" en el panel: el gráfico muestra lo que realmente pasó.</p></div>
+  <div class="tarjeta"><div class="tabla-caja"><table id="tab-conf"></table></div><p class="nota" id="nota-conf" style="margin-top:10px"></p></div>
+</section>
+
+<section id="metodo" style="margin-top:34px">
+  <div class="titulo-sec"><div class="etiqueta">Cómo funciona</div><h2>De los datos abiertos al pedido</h2></div>
+  <div class="metodo">
+    <div class="tarjeta"><h3>Datos</h3><ul>
+      <li>Casos semanales de dengue y de EDA en menores de 5 años, CDC Perú (Plataforma Nacional de Datos Abiertos), 2000-2025.</li>
+      <li>Temperatura, lluvia y humedad diarias de NASA POWER en la capital de cada provincia.</li>
+      <li>Índices de El Niño de la NOAA, con el retraso con que se publican (Niño 1+2 del mes anterior, ONI de dos meses antes).</li>
+      <li>Población de los censos del INEI 1993, 2007 y 2017.</li></ul></div>
+    <div class="tarjeta"><h3>Modelo</h3><ul>
+      <li>Entrada: las últimas 26 semanas de casos, estacionalidad, clima y El Niño de la provincia.</li>
+      <li>Salida: log(1 + casos) de las 8 semanas siguientes. La red aprende cuánto cambian los casos respecto a la última semana.</li>
+      <li>Más de 8 semanas: el modelo vuelve a usar su propio pronóstico y el clima normal de esas semanas (con el escenario), por eso el rango se ensancha.</li>
+      <li>Avanzar en el tiempo: el pronóstico se agrega al historial como si ya hubiera pasado y el modelo vuelve a pronosticar desde ahí. En las semanas simuladas el clima es el normal de esa semana más el escenario elegido.</li>
+      <li>Las redes corren aquí mismo, en el navegador, con los mismos pesos del notebook.</li></ul></div>
+    <div class="tarjeta"><h3>Límites</h3><ul>
+      <li>Son datos de vigilancia: hay subnotificación y los datos de las últimas semanas suelen completarse después.</li>
+      <li>El modelo subestima epidemias más grandes que las que vio al entrenar, como la de 2023.</li>
+      <li>El escenario es una prueba de sensibilidad, no un pronóstico del clima.</li>
+      <li>Las cantidades por caso son supuestos; no se consideran vencimientos ni capacidad de almacén.</li></ul></div>
+  </div>
+  <p class="nota" style="margin-top:14px">Fuentes: CDC Perú, <a href="https://www.datosabiertos.gob.pe/dataset/vigilancia-epidemiol%C3%B3gica-de-dengue" target="_blank" rel="noopener">vigilancia epidemiológica de dengue</a> y de EDA (ODC-By); NASA <a href="https://power.larc.nasa.gov" target="_blank" rel="noopener">POWER</a>; NOAA CPC (<a href="https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt" target="_blank" rel="noopener">ONI</a>, <a href="https://www.cpc.ncep.noaa.gov/data/indices/sstoi.indices" target="_blank" rel="noopener">Niño 1+2</a>); INEI; MINSA RM 071-2017.</p>
+</section>
+</main>
+
+<footer><div class="envoltura"><span>Grupo 5 · MIA-203 Redes Neuronales y Aprendizaje Profundo · UNI FIIS · 2026</span><span>Datos: CDC Perú, NASA POWER, NOAA CPC, INEI</span></div></footer>
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="copiado" id="copiado" role="status" aria-live="polite"></div>
+
+<script>/*__MODELO__*/</script>
+<script>
+const DATA = /*__DATOS__*/null;
+const MAPA = /*__MAPA__*/null;
+</script>
+<script>
+(() => {
+"use strict";
+const D = DATA, L = D.L, HM = D.H, F = D.variables.length, NS = D.NS, ULT = NS - 1, P = D.provincias, NP = P.length;
+const CAL = D.cal, $ = s => document.querySelector(s);
+const NOM_ARQ = {lstm: "LSTM", gru: "GRU", transformer: "Transformer", promedio: "promedio de las tres"};
+const NOM_ENF = {dengue: "dengue", eda: "EDA en menores de 5 años"};
+const ZONAS = [["Éxito", "--z-exito", "--z-exito-bg"], ["Seguridad", "--z-seg", "--z-seg-bg"], ["Alarma", "--z-alarma", "--z-alarma-bg"], ["Epidemia", "--z-epi", "--z-epi-bg"]];
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt = (n, d = 0) => Number(n).toLocaleString("es-PE", {minimumFractionDigits: d, maximumFractionDigits: d});
+const sem = k => `${CAL.ano[k]}-SE${String(CAL.se[k]).padStart(2, "0")}`;
+const fecha = k => new Date(CAL.fecha[k] + "T12:00:00").toLocaleDateString("es-PE", {day: "numeric", month: "short", year: "numeric"});
+const leer = (k, def) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch (e) { return def; } };
+const escribir = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+const signo = (v, d) => `${v > 0 ? "+" : ""}${fmt(v, d)}`;
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "set", "oct", "nov", "dic"];
+function etiquetaMes(k) {            // una etiqueta por trimestre: ene, abr, jul y oct
+  if (k <= 0) return "";
+  const m = +CAL.fecha[k].slice(5, 7), m0 = +CAL.fecha[k - 1].slice(5, 7);
+  return m !== m0 && (m - 1) % 3 === 0 ? `${MESES[m - 1]} ${CAL.fecha[k].slice(0, 4)}` : "";
+}
+
+// ---------------- estado ----------------
+const ESC0 = {dT: 0, ll: 100, dN: 0, dO: 0, K: 8, nombre: "Normal"};
+function idxDe(nombre) { return P.find(p => p.nombre.toUpperCase() === nombre).idx; }
+const est = Object.assign({enf: "dengue", prov: idxDe("PIURA"), arq: "lstm", modo: "ultimo", origen: ULT, H: 8, lead: 4, z: 1.65},
+  leer("grupo5_ajustes_v1", {}));
+est.esc = Object.assign({...ESC0}, est.esc || {});
+const ediciones = {dengue: {}, eda: {}};          // [enfermedad][provincia][semana] = casos
+
+// Historial simulado: semanas que se agregan después del último dato del CDC con el pronóstico del modelo.
+// Se guarda por enfermedad; cada semana lleva los casos de las 14 provincias, el clima y El Niño con que se simuló.
+const SIM_MAX = 78;
+function nuevaExt() { return {n: 0, casos: Object.fromEntries(P.map(p => [p.id, []])), clima: Object.fromEntries(P.map(p => [p.id, []])), enso: [], info: [], pasos: [], ver: 0}; }
+const ext = {dengue: nuevaExt(), eda: nuevaExt()};
+(() => { const g = leer("grupo5_simulacion_v1", null); if (!g) return;
+  ["dengue", "eda"].forEach(enf => { const e = g[enf];
+    if (e && e.n > 0 && e.n <= SIM_MAX && P.every(p => e.casos[p.id] && e.casos[p.id].length === e.n && e.clima[p.id].length === e.n) && e.enso.length === e.n)
+      ext[enf] = {...nuevaExt(), ...e, ver: 1}; }); })();
+(() => { const g = leer("grupo5_ediciones_v1", null); if (!g) return;
+  ["dengue", "eda"].forEach(enf => Object.entries(g[enf] || {}).forEach(([id, ed]) => { const lim = NS + ext[enf].n;
+    const ok = Object.fromEntries(Object.entries(ed).filter(([k, v]) => +k >= L && +k < lim && v >= 0));
+    if (Object.keys(ok).length && P.some(p => p.id === id)) ediciones[enf][id] = ok; })); })();
+const FIN = (enf = est.enf) => ULT + ext[enf].n;
+function guardarSim() { escribir("grupo5_simulacion_v1", ext); escribir("grupo5_ediciones_v1", ediciones); }
+if (est.modo === "ultimo" || !(est.origen >= L - 1 && est.origen <= ULT)) { est.modo = "ultimo"; est.origen = FIN(); }
+const stock = {dengue: {}, eda: {}}, transito = {dengue: {}, eda: {}};
+const kit = D.kit.map(k => ({...k}));
+let guardados = leer("grupo5_pronosticos_v1", []);
+const verGuardado = new Set();
+let res = null;                                     // pronóstico (log) de las 14 provincias
+const graficos = {};
+function guardarAjustes() { escribir("grupo5_ajustes_v1", {enf: est.enf, prov: est.prov, arq: est.arq, modo: est.modo, origen: est.origen, H: est.H, esc: est.esc, lead: est.lead, z: est.z}); }
+
+// ---------------- variables de entrada ----------------
+const cacheRedes = {}, cacheBase = {};
+function redes(enf, arq) {
+  if (arq === "promedio") return ["lstm", "gru", "transformer"].flatMap(a => redes(enf, a));
+  const k = enf + arq;
+  if (!cacheRedes[k]) cacheRedes[k] = D.redes[enf][arq].map(ck => Modelos.cargarRed(ck, D.esquema[arq], D.tipo));
+  return cacheRedes[k];
+}
+const cacheSerie = {};
+function claveExt(enf, pi) { return `${enf}|${pi}|${ext[enf].ver}|${ext[enf].n}`; }
+function limpiarCaches(enf) { [cacheBase, cacheSerie].forEach(c => Object.keys(c).forEach(k => { if (k.startsWith(enf + "|")) delete c[k]; })); }
+function casosObs(enf, pi) {                        // casos del CDC seguidos de las semanas simuladas
+  const k = claveExt(enf, pi);
+  if (cacheSerie[k]) return cacheSerie[k];
+  const s = D.serie[P[pi].id][enf === "dengue" ? "dengue" : "eda"], e = ext[enf];
+  return (cacheSerie[k] = e.n ? s.concat(e.casos[P[pi].id]) : s);
+}
+function base(enf, pi) {                            // filas (NS + simuladas) x F sin estandarizar
+  const k = claveExt(enf, pi);
+  if (cacheBase[k]) return cacheBase[k];
+  const s = D.serie[P[pi].id], e = ext[enf], n = NS + e.n, x = new Float32Array(n * F), casos = casosObs(enf, pi);
+  for (let t = 0; t < n; t++) {
+    const ang = 2 * Math.PI * (CAL.se[t] - 1) / 52.18, j = t - NS;
+    const c = j < 0 ? [s.t2m_media[t], s.t2m_max[t], s.t2m_min[t], s.precip_mm[t], s.hr_media[t]] : e.clima[P[pi].id][j];
+    const en = j < 0 ? [D.enso.nino12[t], D.enso.oni[t]] : e.enso[j];
+    const fila = [Math.log1p(casos[t]), Math.sin(ang), Math.cos(ang), c[0], c[1], c[2], Math.log1p(Math.max(0, c[3])), c[4], en[0], en[1]];
+    for (let f = 0; f < F; f++) x[t * F + f] = fila[f];
+  }
+  return (cacheBase[k] = x);
+}
+function aplicarEsc(v, o, e) {
+  v[o + 3] += e.dT; v[o + 4] += e.dT; v[o + 5] += e.dT;
+  v[o + 6] = Math.log1p(Math.expm1(v[o + 6]) * e.ll / 100);
+  v[o + 8] += e.dN; v[o + 9] += e.dO;
+}
+function escSimulada(v, o, pi, k, e) {                // semana simulada: clima normal de esa semana + escenario
+  const nor = D.clima_normal[P[pi].id], s = CAL.se[k] - 1;
+  v[o + 3] = nor.t2m_media[s] + e.dT; v[o + 4] = nor.t2m_max[s] + e.dT; v[o + 5] = nor.t2m_min[s] + e.dT;
+  v[o + 6] = Math.log1p(nor.precip_mm[s] * e.ll / 100); v[o + 7] = nor.hr_media[s];
+  v[o + 8] += e.dN; v[o + 9] += e.dO;
+}
+function filaFutura(v, o, pi, k, ylog, e, enso) {
+  const nor = D.clima_normal[P[pi].id], s = CAL.se[k] - 1, ang = 2 * Math.PI * (CAL.se[k] - 1) / 52.18;
+  v[o] = ylog; v[o + 1] = Math.sin(ang); v[o + 2] = Math.cos(ang);
+  v[o + 3] = nor.t2m_media[s] + e.dT; v[o + 4] = nor.t2m_max[s] + e.dT; v[o + 5] = nor.t2m_min[s] + e.dT;
+  v[o + 6] = Math.log1p(nor.precip_mm[s] * e.ll / 100); v[o + 7] = nor.hr_media[s];
+  v[o + 8] = enso[0] + e.dN; v[o + 9] = enso[1] + e.dO;
+}
+
+/* Pronóstico de una provincia: promedio (en log) de las redes del modelo elegido.
+   Hasta 8 semanas sale directo de la red; para más, se encadena usando su propio pronóstico. */
+function pronosticarProv(enf, arq, pi, origen, H, e, ed) {
+  const X = base(enf, pi), nets = redes(enf, arq), acc = new Float64Array(H), ini = origen - L + 1;
+  const enso = [X[origen * F + 8], X[origen * F + 9]];
+  for (const red of nets) {
+    let v = X.slice(ini * F, (origen + 1) * F), o = origen, hecho = 0;
+    for (const k in ed) { const kk = +k; if (kk >= ini && kk <= origen) v[(kk - ini) * F] = Math.log1p(Math.max(0, ed[k])); }
+    for (let t = Math.max(0, L - e.K); t < L; t++) { if (ini + t <= ULT) aplicarEsc(v, t * F, e); else escSimulada(v, t * F, pi, ini + t, e); }
+    while (hecho < H) {
+      const y = Modelos.pronosticarRed(red, v, L, F, pi), n = Math.min(HM, H - hecho);
+      for (let j = 0; j < n; j++) acc[hecho + j] += y[j];
+      hecho += HM;
+      if (hecho >= H) break;
+      const nv = new Float32Array(L * F);
+      nv.set(v.subarray(HM * F));
+      for (let j = 0; j < HM; j++) filaFutura(nv, (L - HM + j) * F, pi, o + 1 + j, y[j], e, enso);
+      v = nv; o += HM;
+    }
+  }
+  for (let h = 0; h < H; h++) acc[h] /= nets.length;
+  return acc;
+}
+
+// rango del 80 % a partir de los errores de validación
+function banda(enf, arq, mlog) {
+  const b = D.banda[enf][arq], lo = [], hi = [], med = [];
+  for (let h = 0; h < mlog.length; h++) {
+    const j = Math.min(h, HM - 1), f = h < HM ? 1 : Math.sqrt((h + 1) / HM);
+    med.push(Math.expm1(mlog[h]));
+    lo.push(Math.expm1(Math.max(0, mlog[h] + b.q10[j] * f)));
+    hi.push(Math.expm1(mlog[h] + b.q90[j] * f));
+  }
+  return {med, lo, hi};
+}
+
+// canal endémico: cuartiles de la misma semana en los 5 años anteriores
+const tablaAnual = {};
+function tablaDe(enf, pi) {
+  const key = enf + pi;
+  if (tablaAnual[key]) return tablaAnual[key];
+  const t = {}, idxs = pi === "todas" ? P.map(p => p.idx) : [pi];
+  for (let k = 0; k < NS; k++) {
+    const id = CAL.ano[k] * 100 + Math.min(CAL.se[k], 52);
+    let v = 0; idxs.forEach(i => v += casosObs(enf, i)[k]);
+    t[id] = (t[id] || 0) + v;
+  }
+  return (tablaAnual[key] = t);
+}
+function cuartil(a, q) { const s = [...a].sort((x, y) => x - y), pos = (s.length - 1) * q, b = Math.floor(pos); return s[b] + (s[Math.min(b + 1, s.length - 1)] - s[b]) * (pos - b); }
+function canal(enf, pi, k) {
+  const t = tablaDe(enf, pi), a = CAL.ano[k], s = Math.min(CAL.se[k], 52), vals = [];
+  for (let y = a - 5; y < a; y++) if (t[y * 100 + s] !== undefined) vals.push(t[y * 100 + s]);
+  return vals.length ? [cuartil(vals, .25), cuartil(vals, .5), cuartil(vals, .75)] : null;
+}
+function zona(v, q) {
+  if (!q || (v < .5 && q[2] < 1)) return 0;
+  return v < q[0] ? 0 : v < q[1] ? 1 : v < q[2] ? 2 : 3;
+}
+
+// ---------------- cálculo de las 14 provincias ----------------
+const cache = new Map();
+let tarea = 0, espera = null;
+function claveProv(pi, Hc, e = est.esc) { return [pi, est.enf, est.arq, est.origen, Hc, e.dT, e.ll, e.dN, e.dO, e.K, ext[est.enf].ver, JSON.stringify(ediciones[est.enf][P[pi].id] || {})].join("|"); }
+function pronosticoCache(pi, Hc, e = est.esc) {
+  const k = claveProv(pi, Hc, e);
+  let r = cache.get(k);
+  if (!r) {
+    r = pronosticarProv(est.enf, est.arq, pi, est.origen, Hc, e, ediciones[est.enf][P[pi].id] || {});
+    cache.set(k, r);
+    if (cache.size > 900) cache.delete(cache.keys().next().value);
+  }
+  return r;
+}
+async function recalcular() {
+  const id = ++tarea, Hc = Math.max(est.H, HM), nets = redes(est.enf, est.arq).length, aviso = $("#estado-calc"), t0 = performance.now();
+  aviso.textContent = `Calculando con ${nets} redes…`; aviso.classList.add("ocupado");
+  const out = [];
+  for (let pi = 0; pi < NP; pi++) {
+    const nuevo = !cache.has(claveProv(pi, Hc));
+    out.push(pronosticoCache(pi, Hc));
+    if (nuevo) { await new Promise(rr => setTimeout(rr, 0)); if (id !== tarea) return; }
+  }
+  res = out;
+  aviso.classList.remove("ocupado");
+  aviso.textContent = `${nets} redes · ${Math.round(performance.now() - t0)} ms`;
+  pintarTodo();
+  guardarAjustes();
+}
+function programar(ms = 160) { clearTimeout(espera); espera = setTimeout(recalcular, ms); }
+
+function resultadoSel() {
+  const H = est.H, idxs = est.prov === "todas" ? P.map(p => p.idx) : [est.prov];
+  const med = new Array(H).fill(0), lo = new Array(H).fill(0), hi = new Array(H).fill(0);
+  idxs.forEach(pi => { const b = banda(est.enf, est.arq, res[pi].slice(0, H)); for (let h = 0; h < H; h++) { med[h] += b.med[h]; lo[h] += b.lo[h]; hi[h] += b.hi[h]; } });
+  const semanas = [...Array(H).keys()].map(h => est.origen + 1 + h);
+  const zonas = semanas.map((k, h) => { const q = canal(est.enf, est.prov, k); return {q, z: zona(med[h], q)}; });
+  const real = semanas.map(k => k <= ULT ? idxs.reduce((a, pi) => a + casosObs(est.enf, pi)[k], 0) : null);
+  return {med, lo, hi, semanas, zonas, real};
+}
+function pobDe(pi, k) { return P[pi].pob[Math.min(Math.max(CAL.ano[k], 2000), 2030)]; }
+function nombreSel() { return est.prov === "todas" ? "la costa norte (14 provincias)" : `${P[est.prov].nombre} (${P[est.prov].dep})`; }
+function corto() { return est.prov === "todas" ? "Costa norte" : P[est.prov].nombre; }
+function ensoEn(k) { return k <= ULT ? [D.enso.nino12[k], D.enso.oni[k]] : ext[est.enf].enso[k - NS]; }
+function enso() { return ensoEn(est.origen); }
+
+// ---------------- avanzar en el tiempo ----------------
+let auto = false;
+function reanclarEnso(antes) {                      // mantiene el valor de El Niño que ve el usuario al mover el origen
+  const ahora = enso(); est.esc.dN = Math.round((est.esc.dN + antes[0] - ahora[0]) * 1000) / 1000; est.esc.dO = Math.round((est.esc.dO + antes[1] - ahora[1]) * 1000) / 1000;
+}
+function limpiarEdiciones(enf) {
+  const fin = FIN(enf);
+  Object.values(ediciones[enf]).forEach(ed => Object.keys(ed).forEach(k => { if (+k > fin) delete ed[k]; }));
+}
+function avanzar(n) {
+  const e = ext[est.enf];
+  if (est.modo !== "ultimo") { avisar("Para avanzar, elige «Último dato» en el panel"); return false; }
+  n = Math.min(n, SIM_MAX - e.n);
+  if (n <= 0) { avisar(`Llegaste al máximo de ${SIM_MAX} semanas simuladas`); return false; }
+  const Hc = Math.max(est.H, HM, n), o = FIN(), en = enso(), esc = est.esc, r2 = v => Math.round(v * 100) / 100;
+  const out = P.map(p => pronosticoCache(p.idx, Hc));
+  for (let j = 0; j < n; j++) {
+    const k = o + 1 + j, sw = CAL.se[k] - 1;
+    P.forEach(p => {
+      const nor = D.clima_normal[p.id];
+      e.casos[p.id].push(r2(Math.expm1(out[p.idx][j])));
+      e.clima[p.id].push([nor.t2m_media[sw] + esc.dT, nor.t2m_max[sw] + esc.dT, nor.t2m_min[sw] + esc.dT, nor.precip_mm[sw] * esc.ll / 100, nor.hr_media[sw]].map(r2));
+    });
+    e.enso.push([r2(en[0] + esc.dN), r2(en[1] + esc.dO)]);
+    e.info.push({paso: e.pasos.length + 1, modelo: NOM_ARQ[est.arq], escenario: esc.nombre});
+  }
+  e.n += n; e.pasos.push(n); e.ver++;
+  limpiarCaches(est.enf);
+  est.origen = FIN();
+  est.esc.dN = 0; est.esc.dO = 0;                   // El Niño del escenario ya quedó en las semanas agregadas
+  guardarSim(); guardarAjustes(); pintarControles();
+  avisar(`${n} ${n === 1 ? "semana agregada" : "semanas agregadas"} al historial`);
+  return true;
+}
+function deshacer() {
+  const e = ext[est.enf];
+  if (!e.pasos.length) return;
+  const antes = enso(), n = e.pasos.pop();
+  P.forEach(p => { e.casos[p.id].splice(-n); e.clima[p.id].splice(-n); });
+  e.enso.splice(-n); e.info.splice(-n); e.n -= n; e.ver++;
+  limpiarCaches(est.enf); limpiarEdiciones(est.enf);
+  if (est.modo === "ultimo") { est.origen = FIN(); reanclarEnso(antes); }
+  guardarSim(); guardarAjustes(); pintarControles(); programar(0);
+}
+function reiniciarSim() {
+  const antes = enso(), v = ext[est.enf].ver + 1;
+  ext[est.enf] = nuevaExt(); ext[est.enf].ver = v;
+  limpiarCaches(est.enf); limpiarEdiciones(est.enf);
+  if (est.modo === "ultimo") { est.origen = FIN(); reanclarEnso(antes); }
+  guardarSim(); guardarAjustes(); pintarControles(); programar(0);
+}
+async function alternarAuto() {
+  auto = !auto; pintarSim();
+  while (auto) {
+    if (!avanzar(1)) break;
+    await recalcular();
+    await new Promise(r => setTimeout(r, 500));
+  }
+  auto = false; pintarSim();
+}
+function casosSemana(enf, pi, k) { const ed = ediciones[enf][P[pi].id] || {}; return ed[k] !== undefined ? ed[k] : casosObs(enf, pi)[k]; }
+function pintarSim() {
+  const e = ext[est.enf], ok = est.modo === "ultimo", idxs = est.prov === "todas" ? P.map(p => p.idx) : [est.prov];
+  ["#btn-av1", "#btn-av4", "#btn-avh"].forEach(id => { $(id).disabled = !ok || auto || e.n >= SIM_MAX; });
+  $("#btn-avh").textContent = `Agregar las ${est.H} ${est.H === 1 ? "semana" : "semanas"}`;
+  const ba = $("#btn-auto");
+  ba.disabled = !ok || (e.n >= SIM_MAX && !auto); ba.textContent = auto ? "⏸ Detener" : "▶ Avanzar solo"; ba.setAttribute("aria-pressed", auto);
+  $("#btn-deshacer").disabled = !e.pasos.length || auto; $("#btn-reiniciar").disabled = !e.n || auto; $("#btn-copiar-sim").disabled = !e.n;
+  let t;
+  if (!e.n) t = `El historial termina en el último dato real del CDC (<b>${sem(ULT)}</b>). Pulsa «Agregar» para sumar el pronóstico como si ya hubiera pasado y seguir avanzando desde ahí, o «Avanzar solo» para que vaya semana por semana.`;
+  else t = `Historial simulado: <b>${e.n} ${e.n === 1 ? "semana" : "semanas"}</b> (${sem(NS)} a ${sem(FIN())}) en ${e.pasos.length} ${e.pasos.length === 1 ? "paso" : "pasos"}, a continuación del último dato real (${sem(ULT)}). ` +
+    (ok ? `El pronóstico de arriba parte de la <b>${sem(FIN())}</b>.` : "Ahora estás viendo otra fecha; vuelve a «Último dato» para seguir avanzando.");
+  if (!ok && !e.n) t += " Para avanzar, elige «Último dato» en el panel.";
+  $("#sim-estado").innerHTML = t;
+  $("#caja-tab-sim").hidden = !e.n;
+  if (!e.n) return;
+  let h = `<thead><tr><th>Paso</th><th>Semana</th><th>Inicia</th><th>Casos · ${corto()}</th><th>Zona</th><th>Origen del dato</th><th>Modelo</th><th>Escenario</th></tr></thead><tbody>`;
+  let tot = 0;
+  for (let j = 0; j < e.n; j++) {
+    const k = NS + j, inf = e.info[j];
+    let v = 0, editado = false;
+    idxs.forEach(pi => { const ed = ediciones[est.enf][P[pi].id] || {}; if (ed[k] !== undefined) editado = true; v += casosSemana(est.enf, pi, k); });
+    tot += v;
+    h += `<tr><td>${inf.paso}</td><td>${sem(k)}</td><td class="txt">${fecha(k)}</td><td>${fmt(v, v < 10 ? 1 : 0)}</td><td class="txt">${chipZona(zona(v, canal(est.enf, est.prov, k)))}</td>
+      <td class="txt">${editado ? '<span class="fuente ed">Lo escribiste</span>' : '<span class="fuente sim">Pronóstico</span>'}</td><td class="txt">${inf.modelo}</td><td class="txt">${inf.escenario}</td></tr>`;
+  }
+  h += `<tr class="total"><td class="txt" colspan="3">Total simulado</td><td>${fmt(tot)}</td><td colspan="4"></td></tr>`;
+  $("#tab-sim").innerHTML = h + "</tbody>";
+  const caja = $("#caja-tab-sim"); caja.scrollTop = caja.scrollHeight;
+}
+function tsvSim() {
+  const e = ext[est.enf];
+  const filas = [["Paso", "Semana", "Inicia", "Modelo", "Escenario", ...P.map(p => p.nombre), "Costa norte"].join("\t")];
+  for (let j = 0; j < e.n; j++) {
+    const k = NS + j, vals = P.map(p => Math.round(casosSemana(est.enf, p.idx, k) * 10) / 10);
+    filas.push([e.info[j].paso, sem(k), CAL.fecha[k], e.info[j].modelo, e.info[j].escenario, ...vals, Math.round(vals.reduce((a, b) => a + b, 0) * 10) / 10].join("\t"));
+  }
+  return filas.join("\n");
+}
+
+// ---------------- pintar ----------------
+function pintarTodo() { pintarResumen(); pintarGrafico(); pintarSim(); pintarSemanas(); pintarEditor(); pintarMapa(); pintarPedido(); pintarGuardados(); pintarComparacion(); }
+
+function pintarCabecera() {
+  const tot = P.reduce((a, p) => a + D.serie[p.id].dengue.reduce((x, y) => x + y, 0), 0);
+  $("#cabecera").innerHTML = [[fmt(tot), "casos de dengue 2000-2025"], ["14", "provincias"], [sem(ULT), "último dato del CDC"], ["15", "redes por enfermedad"]]
+    .map(([v, t]) => `<div><b>${v}</b><span>${t}</span></div>`).join("");
+}
+
+function llenarSemanas() {
+  const a = +$("#sel-anio").value, actual = $("#sel-sem").value;
+  let max = 0; for (let k = 0; k < NS; k++) if (CAL.ano[k] === a) max = Math.max(max, CAL.se[k]);
+  const min = a === CAL.ano[L - 1] ? CAL.se[L - 1] : 1;
+  $("#sel-sem").innerHTML = [...Array(max - min + 1).keys()].map(i => `<option value="${min + i}">SE ${String(min + i).padStart(2, "0")}</option>`).join("");
+  if (actual && +actual >= min && +actual <= max) $("#sel-sem").value = actual;
+}
+function indiceDe(a, s) { for (let k = 0; k < NS; k++) if (CAL.ano[k] === a && CAL.se[k] === s) return k; return ULT; }
+
+function pintarControles() {
+  document.querySelectorAll("#seg-enf button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === est.enf));
+  document.querySelectorAll("#seg-arq button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === est.arq));
+  document.querySelectorAll("#seg-origen button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === est.modo));
+  $("#btn-ultimo").textContent = ext[est.enf].n ? "Último dato (simulado)" : "Último dato";
+  $("#caja-fecha").hidden = est.modo !== "fecha";
+  $("#sel-prov").value = est.prov;
+  $("#sel-anio").value = CAL.ano[est.origen]; llenarSemanas(); $("#sel-sem").value = CAL.se[est.origen];
+  const fin = est.origen + est.H;
+  $("#rng-h").value = est.H;
+  $("#val-h").textContent = `${est.H} ${est.H === 1 ? "semana" : "semanas"}`;
+  $("#ayuda-h").textContent = `De la ${sem(est.origen + 1)} a la ${sem(fin)} (${fecha(est.origen + 1)} al ${fecha(fin)}).` + (est.H > HM ? " Pasadas las 8 semanas el modelo encadena sus propios pronósticos: tómalo como tendencia." : "");
+  const a = CAL.ano[est.origen + 1], av = $("#aviso-origen");
+  if (est.modo === "ultimo" && ext[est.enf].n) { av.className = "aviso"; av.textContent = `Pronóstico desde el final del historial simulado (${sem(est.origen)}). El último dato real del CDC es la ${sem(ULT)}.`; }
+  else if (est.origen === ULT) { av.className = "aviso"; av.textContent = `Pronóstico hacia adelante desde el último dato publicado (${sem(ULT)}, semana del ${fecha(ULT)}).`; }
+  else if (a <= 2016) { av.className = "aviso amarillo"; av.textContent = "Fecha del periodo de entrenamiento (2000-2016): el modelo ya vio estos datos, así que el acierto se verá mejor de lo que es."; }
+  else if (a <= 2020) { av.className = "aviso"; av.textContent = "Fecha del periodo de validación (2017-2020). El gráfico muestra también lo que realmente pasó."; }
+  else { av.className = "aviso"; av.textContent = "Fecha del periodo de prueba (2021-2025): el modelo nunca vio estos datos. El gráfico muestra lo que realmente pasó."; }
+  const e = est.esc, en = enso();
+  $("#rng-dt").value = e.dT; $("#val-dt").textContent = `${signo(e.dT, 1)} °C`;
+  $("#rng-ll").value = e.ll; $("#val-ll").textContent = `${e.ll} %`;
+  $("#rng-n12").value = en[0] + e.dN; $("#val-n12").textContent = `${signo(en[0] + e.dN, 2)} °C` + (Math.abs(e.dN) < 1e-9 ? " (dato)" : "");
+  $("#rng-oni").value = en[1] + e.dO; $("#val-oni").textContent = signo(en[1] + e.dO, 2) + (Math.abs(e.dO) < 1e-9 ? " (dato)" : "");
+  $("#sel-k").value = e.K;
+  document.querySelectorAll("#presets .chip").forEach(c => c.setAttribute("aria-pressed", c.dataset.n === e.nombre));
+  $("#val-lead").textContent = `${est.lead} ${est.lead === 1 ? "semana" : "semanas"}`; $("#rng-lead").value = est.lead; $("#sel-z").value = String(est.z);
+}
+
+function pintarResumen() {
+  const r = resultadoSel(), H = est.H, suma = a => a.reduce((x, y) => x + y, 0);
+  const tot = suma(r.med), lo = suma(r.lo), hi = suma(r.hi);
+  let ip = 0; r.med.forEach((v, h) => { if (v > r.med[ip]) ip = h; });
+  const epi = r.zonas.filter(z => z.z === 3).length, ala = r.zonas.filter(z => z.z >= 2).length;
+  const pob = est.prov === "todas" ? P.reduce((a, p) => a + pobDe(p.idx, r.semanas[0]), 0) : pobDe(est.prov, r.semanas[0]);
+  const inc = tot / H / pob * 1e5;
+  const tiles = [["Total", fmt(tot), `casos esperados en ${H} ${H === 1 ? "semana" : "semanas"}`, `rango 80 %: ${fmt(lo)} a ${fmt(hi)}`],
+    ["Pico", fmt(r.med[ip]), "casos en la semana más alta", sem(r.semanas[ip])],
+    ["Canal endémico", `${epi} de ${H}`, "semanas en zona de epidemia", `${ala} en alarma o epidemia`],
+    ["Incidencia", fmt(inc, inc < 10 ? 1 : 0), "casos por 100 mil hab. por semana", "promedio del periodo"]];
+  $("#kpis").innerHTML = tiles.map(([e, v, t, s]) => `<div class="kpi"><div class="etiqueta">${e}</div><div class="v">${v}</div><div class="t">${t}</div><div class="t">${s}</div></div>`).join("");
+  const escTxt = est.esc.nombre === "Normal" ? "con el clima observado y El Niño publicado" : `con el escenario «${est.esc.nombre}»`;
+  let f = `Según el modelo <b>${NOM_ARQ[est.arq]}</b>, ${escTxt}, se esperan <b>${fmt(tot)} casos de ${NOM_ENF[est.enf]}</b> en ${nombreSel()} entre la ${sem(r.semanas[0])} y la ${sem(r.semanas[H - 1])}. `;
+  f += `El pico sería de <b>${fmt(r.med[ip])} casos</b> en la ${sem(r.semanas[ip])}. `;
+  f += epi ? `<b>${epi} ${epi === 1 ? "semana estaría" : "semanas estarían"} en zona de epidemia.</b>` : "Ninguna semana pasaría a zona de epidemia.";
+  const reales = r.real.filter(v => v !== null);
+  if (reales.length) {
+    const n = reales.length, idxs = est.prov === "todas" ? P.map(p => p.idx) : [est.prov];
+    const ult = idxs.reduce((a, pi) => a + casosObs(est.enf, pi)[est.origen], 0);
+    const mae = r.real.reduce((a, v, h) => v === null ? a : a + Math.abs(v - r.med[h]), 0) / n;
+    const maeP = r.real.reduce((a, v) => v === null ? a : a + Math.abs(v - ult), 0) / n;
+    f += ` En realidad hubo <b>${fmt(suma(reales))} casos</b> en esas ${n} semanas. Error medio del modelo: ${fmt(mae, 1)} casos por semana; repetir la última semana habría dado ${fmt(maeP, 1)}.`;
+  }
+  if (est.origen > ULT) f += ` <span style="color:var(--sim)">Las últimas ${est.origen - ULT} semanas del historial son simuladas.</span>`;
+  $("#frase").innerHTML = f;
+}
+
+const lineaOrigen = {id: "lineaOrigen", afterDraw(ch, args, op) {
+  const a = ch.chartArea, c = ch.ctx;
+  [[op.indice2, op.etiqueta2, "--muted", 26], [op.indice, op.etiqueta, op.color || "--muted", 12]].forEach(([i, txt, col, dy]) => {
+    if (i === undefined || i === null || i < 0) return;
+    const x = ch.scales.x.getPixelForValue(i);
+    c.save(); c.strokeStyle = css(col); c.setLineDash([3, 3]); c.lineWidth = 1;
+    c.beginPath(); c.moveTo(x, a.top); c.lineTo(x, a.bottom); c.stroke(); c.setLineDash([]);
+    c.fillStyle = css(col); c.font = `600 11px ${css("--f-display")}`; c.textAlign = "right";
+    c.fillText(txt, x - 5, a.top + dy); c.restore();
+  });
+}};
+
+function pintarGrafico() {
+  const r = resultadoSel(), H = est.H, hist = Math.min(52, est.origen + 1), k0 = est.origen - hist + 1;
+  const idxs = est.prov === "todas" ? P.map(p => p.idx) : [est.prov];
+  const edSel = est.prov === "todas" ? {} : (ediciones[est.enf][P[est.prov].id] || {});
+  const etiquetas = [], obs = [], simd = [], ed = [], orig = [];
+  for (let k = k0; k <= est.origen + H; k++) {
+    etiquetas.push(sem(k));
+    if (k <= est.origen) {
+      let v = 0; idxs.forEach(pi => { v += casosSemana(est.enf, pi, k); });
+      if (k <= ULT) { obs.push(v); simd.push(k === ULT && est.origen > ULT ? v : null); } else { obs.push(null); simd.push(v); }
+      ed.push(edSel[k] !== undefined ? v : null); orig.push(edSel[k] !== undefined && k <= ULT ? casosObs(est.enf, est.prov)[k] : null);
+    } else { obs.push(null); simd.push(null); ed.push(null); orig.push(null); }
+  }
+  const nH = obs.length - H, conSim = simd.some(v => v !== null);
+  const ultV = obs[nH - 1] !== null ? obs[nH - 1] : simd[nH - 1];
+  const unido = a => new Array(nH - 1).fill(null).concat([ultV], a);
+  const fut = a => new Array(nH).fill(null).concat(a);
+  const acento = css("--accent"), colG = ["--g1", "--g2", "--g3", "--g4"];
+  const visibles = guardados.filter(g => verGuardado.has(g.id) && g.enf === est.enf);
+  const ds = [
+    {label: "inf", data: unido(r.lo), borderWidth: 0, pointRadius: 0, fill: false, borderColor: "transparent"},
+    {label: "Rango 80 %", data: unido(r.hi), borderWidth: 0, pointRadius: 0, fill: "-1", backgroundColor: acento + "2e", borderColor: "transparent"},
+    {label: "Casos observados", data: obs, borderColor: css("--obs"), borderWidth: 2, pointRadius: 0, tension: .15},
+    {label: "Semanas simuladas", data: simd, borderColor: css("--sim"), borderWidth: 2.2, pointRadius: c => c.dataIndex > nH - 1 - (est.origen - ULT) ? 2.5 : 0, pointBackgroundColor: css("--sim"), tension: .15},
+    {label: "Pronóstico", data: unido(r.med), borderColor: acento, borderWidth: 2.6, pointRadius: c => c.dataIndex >= nH ? 3 : 0, pointBackgroundColor: acento, tension: .15},
+    {label: "Umbral de epidemia", data: fut(r.zonas.map(z => z.q ? z.q[2] : null)), borderColor: css("--z-epi"), borderDash: [5, 4], borderWidth: 1.4, pointRadius: 0, stepped: "middle"},
+    {label: "Umbral de alarma", data: fut(r.zonas.map(z => z.q ? z.q[1] : null)), borderColor: css("--z-alarma"), borderDash: [2, 3], borderWidth: 1.4, pointRadius: 0, stepped: "middle"}];
+  const conReal = r.real.some(v => v !== null), conEd = ed.some(v => v !== null);
+  if (conReal) ds.push({label: "Lo que realmente pasó", data: fut(r.real), borderColor: css("--real"), borderDash: [6, 3], borderWidth: 2, pointRadius: 2.5, pointBackgroundColor: css("--real")});
+  if (conEd) {
+    ds.push({label: "Casos que escribiste", data: ed, showLine: false, pointRadius: 5, pointBackgroundColor: css("--edit"), borderColor: css("--edit")});
+    ds.push({label: "Dato real del CDC", data: orig, showLine: false, pointRadius: 5, pointStyle: "crossRot", borderColor: css("--muted"), pointBorderWidth: 2});
+  }
+  visibles.forEach((g, i) => ds.push({label: `Guardado ${g.n}: ${g.titulo}`, data: etiquetas.map(l => { const j = g.semanas.indexOf(l); return j >= 0 ? g.med[j] : null; }),
+    borderColor: css(colG[i % 4]), borderDash: [4, 3], borderWidth: 2, pointRadius: 0, spanGaps: true}));
+  $("#tit-graf").textContent = `Casos de ${NOM_ENF[est.enf]} por semana · ${corto()}`;
+  $("#sub-graf").textContent = `Últimas ${hist} semanas${conSim ? ` (${est.origen - ULT} simuladas)` : " observadas"} y ${H} de pronóstico con ${NOM_ARQ[est.arq]}`;
+  const linea = css("--line");
+  // los umbrales del canal no deben aplastar la escala cuando hay pocos casos
+  const numeros = a => a.filter(v => v !== null && isFinite(v));
+  const datosMax = Math.max(1, ...numeros(obs), ...numeros(simd), ...numeros(r.hi), ...numeros(r.real), ...ds.filter(d => d.label.startsWith("Guardado")).flatMap(d => numeros(d.data)));
+  const umbralMax = Math.max(0, ...numeros(r.zonas.map(z => z.q ? z.q[2] : null)));
+  const yMax = Math.max(datosMax * 1.3, Math.min(umbralMax * 1.05, datosMax * 3), 5);
+  Chart.defaults.font.family = css("--f-body"); Chart.defaults.color = css("--ink-2");
+  const cfg = {type: "line", data: {labels: etiquetas, datasets: ds}, plugins: [lineaOrigen],
+    options: {responsive: true, maintainAspectRatio: false, animation: false, interaction: {mode: "index", intersect: false},
+      plugins: {legend: {display: false}, lineaOrigen: {indice: nH - 1, etiqueta: est.origen > ULT ? "hoy (simulado)" : "último dato", color: est.origen > ULT ? "--sim" : "--muted",
+          indice2: est.origen > ULT && ULT >= k0 ? ULT - k0 : null, etiqueta2: "último dato real"},
+        tooltip: {backgroundColor: css("--ink"), titleColor: css("--surface"), bodyColor: css("--surface"), padding: 10,
+          filter: c => c.parsed.y !== null && c.dataset.label !== "inf" && !(c.dataIndex === nH - 1 && ["Pronóstico", "Rango 80 %"].includes(c.dataset.label)) && !(c.dataset.label === "Semanas simuladas" && etiquetas[c.dataIndex] === sem(ULT)),
+          callbacks: {label: c => {
+            if (c.dataset.label === "Rango 80 %") { const j = c.dataIndex - nH; return `Rango 80 %: ${fmt(r.lo[j])} a ${fmt(r.hi[j])}`; }
+            return `${c.dataset.label}: ${fmt(c.parsed.y, c.parsed.y < 10 ? 1 : 0)}`; }}}},
+      scales: {x: {grid: {display: false}, border: {color: linea},
+                   ticks: {autoSkip: false, maxRotation: 0, callback: (v, i) => etiquetaMes(k0 + i)}},
+               y: {beginAtZero: true, max: yMax, grid: {color: linea}, border: {display: false}, title: {display: true, text: "casos por semana"}, ticks: {callback: v => fmt(v)}}}}};
+  if (graficos.pron) graficos.pron.destroy();
+  graficos.pron = new Chart($("#g-pron"), cfg);
+  const items = [["--obs", "Casos observados", ""], ...(conSim ? [["--sim", "Semanas simuladas", ""]] : []), ["--accent", "Pronóstico", ""], ["--accent", "Rango 80 %", "banda"], ["--z-epi", "Umbral de epidemia", "punteada"], ["--z-alarma", "Umbral de alarma", "punteada"]];
+  if (conReal) items.push(["--real", "Lo que realmente pasó", "punteada"]);
+  if (conEd) items.push(["--edit", "Casos que escribiste", ""]);
+  visibles.forEach((g, i) => items.push([colG[i % 4], `Guardado ${g.n}: ${g.titulo}`, "punteada"]));
+  $("#leyenda-graf").innerHTML = items.map(([c, t, cl]) => `<span><i class="${cl}" style="--c:var(${c})"></i>${t}</span>`).join("");
+}
+
+function chipZona(z) { const [n, c, b] = ZONAS[z]; return `<span class="zona" style="--zc:var(${c});--zb:var(${b})">${n}</span>`; }
+function pintarSemanas() {
+  const r = resultadoSel(), conReal = r.real.some(v => v !== null);
+  let h = `<thead><tr><th>Semana</th><th>Inicia</th><th>Casos esperados</th><th>Rango 80 %</th><th>Umbral de epidemia</th><th>Zona</th>${conReal ? "<th>Real</th>" : ""}</tr></thead><tbody>`;
+  r.semanas.forEach((k, j) => {
+    h += `<tr><td>${sem(k)}</td><td class="txt">${fecha(k)}</td><td>${fmt(r.med[j])}</td><td>${fmt(r.lo[j])} – ${fmt(r.hi[j])}</td><td>${r.zonas[j].q ? fmt(r.zonas[j].q[2]) : "—"}</td><td class="txt">${chipZona(r.zonas[j].z)}</td>${conReal ? `<td>${r.real[j] === null ? "—" : fmt(r.real[j])}</td>` : ""}</tr>`;
+  });
+  $("#tab-semanas").innerHTML = h + "</tbody>";
+}
+
+function pintarEditor() {
+  const caja = $("#caja-editor");
+  if (est.prov === "todas") { caja.hidden = true; return; }
+  caja.hidden = false;
+  const id = P[est.prov].id, ed = ediciones[est.enf][id] || {}, obs = casosObs(est.enf, est.prov);
+  let h = `<thead><tr><th>Semana</th><th>Inicia</th><th>Origen</th><th>Dato</th><th>Casos para el pronóstico</th></tr></thead><tbody>`;
+  for (let k = est.origen - 7; k <= est.origen; k++) {
+    const v = ed[k] !== undefined ? ed[k] : Math.round(obs[k]);
+    h += `<tr><td>${sem(k)}</td><td class="txt">${fecha(k)}</td><td class="txt">${k <= ULT ? '<span class="fuente cdc">CDC</span>' : '<span class="fuente sim">Simulado</span>'}</td><td>${fmt(obs[k])}</td><td><input type="number" min="0" step="1" id="ed-${k}" data-k="${k}" value="${v}" aria-label="Casos de la ${sem(k)}"${ed[k] !== undefined ? ' style="border-color:var(--edit)"' : ""}></td></tr>`;
+  }
+  $("#tab-editor").innerHTML = h + "</tbody>";
+  $("#tab-editor").querySelectorAll("input").forEach(inp => inp.addEventListener("change", () => {
+    const k = +inp.dataset.k, v = Math.max(0, Math.round(+inp.value || 0));
+    ediciones[est.enf][id] = ediciones[est.enf][id] || {};
+    if (v === Math.round(obs[k])) delete ediciones[est.enf][id][k]; else ediciones[est.enf][id][k] = v;
+    guardarSim(); programar(0);
+  }));
+  $("#btn-reset-ed").disabled = !Object.keys(ed).length;
+}
+
+// ---------------- mapa y ranking ----------------
+const CORTES = [1, 5, 20, 100];
+function claseInc(v) { let k = 0; CORTES.forEach(c => { if (v >= c) k++; }); return k; }
+function resumenProv(pi) {
+  const H = est.H, b = banda(est.enf, est.arq, res[pi].slice(0, H)), k1 = est.origen + 1;
+  const tot = b.med.reduce((a, x) => a + x, 0);
+  let peor = 0; b.med.forEach((v, h) => { peor = Math.max(peor, zona(v, canal(est.enf, pi, k1 + h))); });
+  return {tot, inc: tot / H / pobDe(pi, k1) * 1e5, peor};
+}
+function pintarMapa() {
+  const M = MAPA, porId = Object.fromEntries(P.map(p => [p.id, p])), rs = P.map(p => resumenProv(p.idx));
+  let svg = `<svg viewBox="0 0 ${M.W} ${M.H}" role="img" aria-label="Mapa de riesgo pronosticado por provincia">`;
+  M.provincias.filter(o => !o.objetivo).forEach(o => { svg += `<path class="ctx" d="${o.d}"/>`; });
+  M.provincias.filter(o => o.objetivo).forEach(o => { const p = porId[o.id];
+    svg += `<path class="obj${est.prov === p.idx ? " sel" : ""}" data-idx="${p.idx}" d="${o.d}" fill="${css("--m-" + claseInc(rs[p.idx].inc))}"/>`; });
+  svg += `<text x="${M.ref.Pacifico[0]}" y="${M.ref.Pacifico[1]}" fill="rgba(255,255,255,.45)" font-size="13" font-style="italic" text-anchor="middle">Océano Pacífico</text>`;
+  svg += `<text x="${M.ref.Ecuador[0]}" y="${M.ref.Ecuador[1]}" fill="rgba(255,255,255,.45)" font-size="12" text-anchor="middle">ECUADOR</text></svg>`;
+  $("#mapa-svg").innerHTML = svg;
+  const tip = $("#tip");
+  $("#mapa-svg").querySelectorAll("path.obj").forEach(el => {
+    const p = P[+el.dataset.idx], r = rs[p.idx];
+    el.addEventListener("mousemove", e => { tip.style.opacity = 1; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 14) + "px";
+      tip.innerHTML = `<b>${p.nombre}</b> · ${p.dep}<br>${fmt(r.tot)} casos esperados en ${est.H} sem.<br>${fmt(r.inc, 1)} por 100 mil hab. por semana`; });
+    el.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
+    el.addEventListener("click", () => elegirProv(p.idx));
+  });
+  $("#leyenda-mapa").innerHTML = `<span>Casos por 100 mil hab. por semana:</span>` + ["< 1", "1-5", "5-20", "20-100", "≥ 100"].map((t, i) => `<span><i style="background:${css("--m-" + i)}"></i> ${t}</span>`).join("");
+  $("#tit-mapa").textContent = `Riesgo de ${NOM_ENF[est.enf]} esperado en las próximas ${est.H} ${est.H === 1 ? "semana" : "semanas"}`;
+  $("#sub-mapa").textContent = `De la ${sem(est.origen + 1)} a la ${sem(est.origen + est.H)}, modelo ${NOM_ARQ[est.arq]}, escenario «${est.esc.nombre}».`;
+  const orden = P.map(p => p.idx).sort((a, b) => rs[b].tot - rs[a].tot);
+  let h = `<thead><tr><th>Provincia</th><th>Casos esperados</th><th>Por 100 mil / sem.</th><th>Peor zona</th></tr></thead><tbody>`;
+  orden.forEach(pi => { const r = rs[pi]; h += `<tr class="clic${est.prov === pi ? " sel" : ""}" data-idx="${pi}"><td class="txt"><b>${P[pi].nombre}</b> <span class="nota">${P[pi].dep}</span></td><td>${fmt(r.tot)}</td><td>${fmt(r.inc, 1)}</td><td class="txt">${chipZona(r.peor)}</td></tr>`; });
+  h += `<tr class="total clic${est.prov === "todas" ? " sel" : ""}" data-idx="todas"><td class="txt">Costa norte</td><td>${fmt(rs.reduce((a, r) => a + r.tot, 0))}</td><td></td><td></td></tr>`;
+  $("#tab-ranking").innerHTML = h + "</tbody>";
+  $("#tab-ranking").querySelectorAll("tr.clic").forEach(tr => tr.addEventListener("click", () => elegirProv(tr.dataset.idx === "todas" ? "todas" : +tr.dataset.idx)));
+}
+
+// ---------------- pedido ----------------
+function porCaso(pi, enf) {
+  const p = P[pi], out = {};
+  kit.forEach(k => {
+    let f = 0;
+    if (enf === "dengue" && k.enfermedad === "Dengue") f = p.gravedad[k.variable_panel] || 0;
+    if (enf === "eda" && k.variable_panel === "eda_men5") f = 1;
+    if (enf === "eda" && k.variable_panel === "eda_hosp") f = p.hosp_eda;
+    if (f) out[k.medicamento] = (out[k.medicamento] || 0) + f * k.cantidad_por_caso;
+  });
+  return out;
+}
+// demanda del tiempo de entrega y stock de seguridad (en escala log: el error de validación es relativo,
+// así que el stock de seguridad crece con los casos esperados)
+function necesidad(mlog) {
+  const b = D.banda[est.enf][est.arq];
+  let dem = 0, ss = 0;
+  for (let h = 0; h < est.lead; h++) { const m = mlog[h], j = Math.min(h, HM - 1), sd = (b.q90[j] - b.q10[j]) / 2.563;
+    dem += Math.expm1(m); ss += Math.expm1(m + est.z * sd) - Math.expm1(m); }
+  return {dem, ss};
+}
+function pintarPedido() {
+  const lead = est.lead, z = est.z, st = stock[est.enf], tr = transito[est.enf];
+  const filas = P.map(p => {
+    const {dem, ss} = necesidad(res[p.idx]), s = st[p.id] || 0, t = tr[p.id] || 0;
+    return {p, dem, ss, s, t, ped: Math.max(0, dem + ss - s - t)};
+  });
+  let h = `<thead><tr><th>Provincia</th><th>Demanda esperada</th><th>Stock de seguridad</th><th>Pedido sugerido</th><th>Stock actual</th><th>En camino</th></tr></thead><tbody>`;
+  filas.forEach(f => {
+    h += `<tr class="${est.prov === f.p.idx ? "sel" : ""}"><td class="txt"><b>${f.p.nombre}</b></td><td>${fmt(f.dem)}</td><td>${fmt(f.ss)}</td><td><b>${fmt(f.ped)}</b></td>
+      <td><input type="number" min="0" step="1" id="st-${f.p.id}" data-id="${f.p.id}" data-t="s" value="${f.s}" aria-label="Stock actual en ${f.p.nombre}"></td>
+      <td><input type="number" min="0" step="1" id="tr-${f.p.id}" data-id="${f.p.id}" data-t="t" value="${f.t}" aria-label="En camino a ${f.p.nombre}"></td></tr>`;
+  });
+  const T = k => filas.reduce((a, f) => a + f[k], 0);
+  h += `<tr class="total"><td class="txt">Costa norte</td><td>${fmt(T("dem"))}</td><td>${fmt(T("ss"))}</td><td>${fmt(T("ped"))}</td><td>${fmt(T("s"))}</td><td>${fmt(T("t"))}</td></tr>`;
+  $("#tab-plan").innerHTML = h + "</tbody>";
+  $("#tab-plan").querySelectorAll("input").forEach(inp => inp.addEventListener("change", () => { (inp.dataset.t === "s" ? st : tr)[inp.dataset.id] = Math.max(0, Math.round(+inp.value || 0)); pintarPedido(); }));
+  const sel = est.prov === "todas" ? filas : filas.filter(f => f.p.idx === est.prov), ped = sel.reduce((a, f) => a + f.ped, 0);
+  $("#et-pedido").textContent = `Pedido sugerido · ${corto()}`;
+  $("#cifra-pedido").textContent = `${fmt(ped)} tratamientos`;
+  $("#nota-pedido").textContent = `Cubre ${lead} ${lead === 1 ? "semana" : "semanas"} de entrega (${sem(est.origen + 1)} a ${sem(est.origen + lead)}) con ${({"0.84": 80, "1.28": 90, "1.65": 95, "2.33": 99})[String(z)] || 95} % de nivel de servicio.`;
+  const meds = {}, medsT = {};
+  filas.forEach(f => Object.entries(porCaso(f.p.idx, est.enf)).forEach(([m, q]) => { medsT[m] = (medsT[m] || 0) + q * f.ped; if (sel.includes(f)) meds[m] = (meds[m] || 0) + q * f.ped; }));
+  let mh = `<thead><tr><th>Medicamento</th><th>${corto()}</th><th>Costa norte</th></tr></thead><tbody>`;
+  Object.keys(medsT).forEach(m => { mh += `<tr><td class="txt">${m}</td><td>${fmt(meds[m] || 0)}</td><td>${fmt(medsT[m])}</td></tr>`; });
+  $("#tab-meds").innerHTML = mh + "</tbody>";
+  const grupo = {dengue_ssa: "Sin signos de alarma", dengue_csa: "Con signos de alarma", dengue_grave: "Dengue grave", eda_men5: "Episodio < 5 años", eda_hosp: "Hospitalizado"};
+  let kh = `<thead><tr><th>Kit por caso</th><th>Grupo</th><th>Cantidad</th></tr></thead><tbody>`;
+  kit.forEach((k, i) => { const usa = est.enf === "dengue" ? k.enfermedad === "Dengue" : ["eda_men5", "eda_hosp"].includes(k.variable_panel);
+    if (usa) kh += `<tr><td class="txt">${k.medicamento}</td><td class="txt">${grupo[k.variable_panel] || k.variable_panel}</td><td><input type="number" min="0" step="1" id="kit-${i}" data-i="${i}" value="${k.cantidad_por_caso}" aria-label="Cantidad por caso de ${k.medicamento}"></td></tr>`; });
+  $("#tab-kit").innerHTML = kh + "</tbody>";
+  $("#tab-kit").querySelectorAll("input").forEach(inp => inp.addEventListener("change", () => { kit[+inp.dataset.i].cantidad_por_caso = Math.max(0, +inp.value || 0); pintarPedido(); }));
+}
+
+// ---------------- guardar y comparar ----------------
+function textoEsc() { const e = est.esc, en = enso(); return `${e.nombre}: temperatura ${signo(e.dT, 1)} °C, lluvia ${e.ll} %, Niño 1+2 ${signo(en[0] + e.dN, 2)} °C, ONI ${signo(en[1] + e.dO, 2)}, aplicado a ${e.K} semanas`; }
+function guardar() {
+  const r = resultadoSel(), n = guardados.reduce((a, g) => Math.max(a, g.n), 0) + 1;
+  const ned = est.prov === "todas" ? 0 : Object.keys(ediciones[est.enf][P[est.prov].id] || {}).length;
+  const g = {id: Date.now() + "-" + n, n, guardado: new Date().toLocaleString("es-PE"), enf: est.enf, prov: corto(), arq: NOM_ARQ[est.arq],
+    desde: sem(est.origen) + (est.origen > ULT ? " (sim.)" : ""), H: est.H, escenario: textoEsc() + (ned ? `; ${ned} semanas con casos editados` : "") + (est.origen > ULT ? `; sobre ${est.origen - ULT} semanas simuladas` : ""), titulo: `${corto()} · ${est.esc.nombre}`,
+    semanas: r.semanas.map(sem), med: r.med.map(v => Math.round(v * 10) / 10), lo: r.lo.map(Math.round), hi: r.hi.map(Math.round),
+    total: Math.round(r.med.reduce((a, b) => a + b, 0)), pico: Math.round(Math.max(...r.med)), pedido: $("#cifra-pedido").textContent};
+  guardados.unshift(g); guardados = guardados.slice(0, 30); verGuardado.add(g.id);
+  escribir("grupo5_pronosticos_v1", guardados);
+  avisar(`Pronóstico ${n} guardado`); pintarGuardados(); pintarGrafico(); pintarComparacion();
+}
+function pintarGuardados() {
+  const caja = $("#lista-guardados");
+  $("#btn-borrar").disabled = !guardados.length;
+  if (!guardados.length) { caja.innerHTML = `<div class="vacio">Todavía no hay pronósticos guardados. Ajusta el panel y pulsa «Guardar pronóstico»: aquí quedará el registro para compararlo con otros escenarios.</div>`; return; }
+  let h = `<div class="tabla-caja"><table><thead><tr><th>N.°</th><th>Ver</th><th>Guardado</th><th>Enfermedad</th><th>Provincia</th><th>Modelo</th><th>Desde</th><th>Semanas</th><th>Total</th><th>Pico</th><th>Pedido</th><th>Escenario</th><th></th></tr></thead><tbody>`;
+  guardados.forEach(g => {
+    h += `<tr><td>${g.n}</td><td><input type="checkbox" id="ver-${g.id}" data-id="${g.id}" ${verGuardado.has(g.id) ? "checked" : ""} aria-label="Ver el pronóstico ${g.n} en el gráfico"></td>
+      <td class="txt">${g.guardado}</td><td class="txt">${g.enf === "dengue" ? "Dengue" : "EDA < 5"}</td><td class="txt">${g.prov}</td><td class="txt">${g.arq}</td><td>${g.desde}</td><td>${g.H}</td><td>${fmt(g.total)}</td><td>${fmt(g.pico)}</td><td class="txt">${g.pedido}</td>
+      <td class="txt" style="white-space:normal;min-width:240px;font-size:.84rem">${g.escenario}</td><td><button type="button" class="chip" data-del="${g.id}" aria-label="Eliminar el pronóstico ${g.n}">Eliminar</button></td></tr>`;
+  });
+  caja.innerHTML = h + "</tbody></table></div>";
+  caja.querySelectorAll("input[type=checkbox]").forEach(c => c.addEventListener("change", () => { c.checked ? verGuardado.add(c.dataset.id) : verGuardado.delete(c.dataset.id); pintarGrafico(); pintarComparacion(); }));
+  caja.querySelectorAll("button[data-del]").forEach(b => b.addEventListener("click", () => { guardados = guardados.filter(g => g.id !== b.dataset.del); verGuardado.delete(b.dataset.del); escribir("grupo5_pronosticos_v1", guardados); pintarGuardados(); pintarGrafico(); pintarComparacion(); }));
+}
+function copiar(texto, que) {
+  const respaldo = () => { $("#respaldo").innerHTML = `<p class="nota" style="margin-top:10px">No se pudo copiar automáticamente. Selecciona el texto y cópialo con Ctrl+C:</p><textarea class="respaldo" id="txt-respaldo" readonly></textarea>`;
+    const t = $("#txt-respaldo"); t.value = texto; t.focus(); t.select(); document.getElementById("guardados").scrollIntoView(); };
+  try { navigator.clipboard.writeText(texto).then(() => avisar(`${que} copiado. Pégalo en Excel.`), respaldo); } catch (e) { respaldo(); }
+}
+function tsvSemanas() {
+  const r = resultadoSel();
+  return [["Provincia", "Semana", "Inicia", "Casos esperados", "Mínimo 80 %", "Máximo 80 %", "Zona"].join("\t"),
+    ...r.semanas.map((k, j) => [corto(), sem(k), CAL.fecha[k], Math.round(r.med[j] * 10) / 10, Math.round(r.lo[j]), Math.round(r.hi[j]), ZONAS[r.zonas[j].z][0]].join("\t"))].join("\n");
+}
+function tsvGuardados() {
+  const filas = [["N.°", "Guardado", "Enfermedad", "Provincia", "Modelo", "Desde", "Semana", "Casos esperados", "Mínimo 80 %", "Máximo 80 %", "Escenario"].join("\t")];
+  guardados.forEach(g => g.semanas.forEach((s, j) => filas.push([g.n, g.guardado, g.enf, g.prov, g.arq, g.desde, s, g.med[j], g.lo[j], g.hi[j], g.escenario].join("\t"))));
+  return filas.join("\n");
+}
+function avisar(t) { const a = $("#copiado"); a.textContent = t; a.style.opacity = 1; clearTimeout(avisar.t); avisar.t = setTimeout(() => { a.style.opacity = 0; }, 2200); }
+
+// ---------------- comparar ----------------
+function etiquetaG(g) { return `N.° ${g.n} · ${g.enf === "dengue" ? "Dengue" : "EDA"} · ${g.titulo}`; }
+function datosComparacion() {
+  const vis = guardados.filter(g => verGuardado.has(g.id)).sort((a, b) => a.n - b.n);
+  const semanas = [...new Set(vis.flatMap(g => g.semanas))].sort();
+  const filas = semanas.map(s => ({s, vals: vis.map(g => { const j = g.semanas.indexOf(s); return j >= 0 ? g.med[j] : null; })}));
+  return {vis, filas};
+}
+function pintarComparacion() {
+  const {vis, filas} = datosComparacion(), t = $("#tab-comp");
+  $("#btn-copiar-comp").disabled = !vis.length;
+  if (!vis.length) { t.innerHTML = `<tbody><tr><td class="txt" style="white-space:normal;padding:18px;color:var(--muted)">Marca «Ver» en dos o más pronósticos guardados (o usa «Guardar los 6» más abajo) para compararlos aquí semana a semana.</td></tr></tbody>`; return; }
+  const dif = vis.length > 1;
+  let h = `<thead><tr><th>Semana</th>${vis.map(g => `<th style="white-space:normal;min-width:120px" title="${g.escenario}">${etiquetaG(g)}</th>`).join("")}${dif ? "<th>Diferencia</th>" : ""}</tr></thead><tbody>`;
+  filas.forEach(f => { const ok = f.vals.filter(v => v !== null);
+    h += `<tr><td>${f.s}</td>${f.vals.map(v => `<td>${v === null ? "—" : fmt(v, v < 10 ? 1 : 0)}</td>`).join("")}${dif ? `<td>${ok.length > 1 ? fmt(Math.max(...ok) - Math.min(...ok), 1) : "—"}</td>` : ""}</tr>`; });
+  h += `<tr class="total"><td class="txt">Total</td>${vis.map(g => `<td>${fmt(g.total)}</td>`).join("")}${dif ? `<td>${fmt(Math.max(...vis.map(g => g.total)) - Math.min(...vis.map(g => g.total)))}</td>` : ""}</tr>`;
+  h += `<tr><td class="txt">Pico</td>${vis.map(g => `<td>${fmt(g.pico)}</td>`).join("")}${dif ? "<td></td>" : ""}</tr>`;
+  h += `<tr><td class="txt">Pedido</td>${vis.map(g => `<td class="txt">${g.pedido}</td>`).join("")}${dif ? "<td></td>" : ""}</tr>`;
+  t.innerHTML = h + "</tbody>";
+}
+function tsvComparacion() {
+  const {vis, filas} = datosComparacion();
+  return [["Semana", ...vis.map(etiquetaG)].join("\t"), ...filas.map(f => [f.s, ...f.vals.map(v => v === null ? "" : v)].join("\t")),
+    ["Total", ...vis.map(g => g.total)].join("\t"), ["Escenario", ...vis.map(g => g.escenario)].join("\t")].join("\n");
+}
+
+let escRes = null;
+const COL_ESC = ["--accent", "--g4", "--g3", "--g2", "--z-epi", "--g1"];
+async function compararEscenarios() {
+  const btn = $("#btn-esc"), idxs = est.prov === "todas" ? P.map(p => p.idx) : [est.prov], H = est.H, Hc = Math.max(H, HM), en = enso();
+  btn.disabled = true; $("#btn-esc-guardar").disabled = true;
+  const filas = [];
+  for (let i = 0; i < PRESETS.length; i++) {
+    const pr = PRESETS[i];
+    btn.textContent = `Calculando ${i + 1} de ${PRESETS.length}…`;
+    const e = {dT: pr.dT, ll: pr.ll, dN: pr.n12 === undefined ? 0 : Math.round((pr.n12 - en[0]) * 1000) / 1000, dO: pr.oni === undefined ? 0 : Math.round((pr.oni - en[1]) * 1000) / 1000, K: est.esc.K, nombre: pr.nombre};
+    const med = new Array(H).fill(0), lo = new Array(H).fill(0), hi = new Array(H).fill(0);
+    let ped = 0;
+    for (const pi of idxs) {
+      const m = pronosticoCache(pi, Hc, e), b = banda(est.enf, est.arq, m.slice(0, H)), nec = necesidad(m);
+      for (let h = 0; h < H; h++) { med[h] += b.med[h]; lo[h] += b.lo[h]; hi[h] += b.hi[h]; }
+      ped += nec.dem + nec.ss;
+      await new Promise(r => setTimeout(r, 0));
+    }
+    const semanas = [...Array(H).keys()].map(h => est.origen + 1 + h);
+    let ip = 0; med.forEach((v, h) => { if (v > med[ip]) ip = h; });
+    const epi = semanas.filter((k, h) => zona(med[h], canal(est.enf, est.prov, k)) === 3).length;
+    filas.push({pr, e, med, lo, hi, semanas, total: med.reduce((a, b) => a + b, 0), ip, epi, ped});
+  }
+  escRes = {filas, prov: corto(), enf: est.enf, arq: NOM_ARQ[est.arq], origen: est.origen, H, sim: est.origen - ULT};
+  btn.disabled = false; btn.textContent = "Calcular los 6 escenarios"; $("#btn-esc-guardar").disabled = false;
+  pintarEscenarios();
+}
+function pintarEscenarios() {
+  if (!escRes) return;
+  const R = escRes, f0 = R.filas[0];
+  $("#caja-esc").hidden = false;
+  $("#tit-esc").textContent = `Los 6 escenarios · ${R.prov} · ${NOM_ENF[R.enf]}`;
+  $("#sub-esc").textContent = `Modelo ${R.arq}, desde la ${sem(R.origen)}${R.sim > 0 ? " (historial simulado)" : ""}, ${R.H} ${R.H === 1 ? "semana" : "semanas"}. Mismos casos recientes y misma provincia; solo cambia el clima y El Niño.`;
+  const labels = f0.semanas.map(sem);
+  const ds = R.filas.map((f, i) => ({label: f.pr.nombre, data: f.med, borderColor: css(COL_ESC[i]), backgroundColor: css(COL_ESC[i]), borderWidth: i === 0 ? 2.8 : 2, pointRadius: 2, tension: .15, borderDash: i === 0 ? [] : [5, 3]}));
+  const linea = css("--line");
+  const cfg = {type: "line", data: {labels, datasets: ds}, options: {responsive: true, maintainAspectRatio: false, animation: false, interaction: {mode: "index", intersect: false},
+    plugins: {legend: {display: false}, tooltip: {backgroundColor: css("--ink"), titleColor: css("--surface"), bodyColor: css("--surface"), padding: 10, callbacks: {label: c => `${c.dataset.label}: ${fmt(c.parsed.y, c.parsed.y < 10 ? 1 : 0)}`}}},
+    scales: {x: {grid: {display: false}, border: {color: linea}, ticks: {maxRotation: 0, autoSkip: true, maxTicksLimit: 9}},
+             y: {beginAtZero: true, grid: {color: linea}, border: {display: false}, title: {display: true, text: "casos por semana"}, ticks: {callback: v => fmt(v)}}}}};
+  if (graficos.esc) graficos.esc.destroy();
+  graficos.esc = new Chart($("#g-esc"), cfg);
+  $("#leyenda-esc").innerHTML = R.filas.map((f, i) => `<span><i class="${i ? "punteada" : ""}" style="--c:var(${COL_ESC[i]})"></i>${f.pr.nombre}</span>`).join("");
+  let h = `<thead><tr><th>Escenario</th><th>Casos en ${R.H} sem.</th><th>vs. Normal</th><th>Pico</th><th>Semana del pico</th><th>Semanas en epidemia</th><th>Pedido (${est.lead} sem. de entrega)</th></tr></thead><tbody>`;
+  R.filas.forEach((f, i) => { const d = f0.total > 0 ? (f.total / f0.total - 1) * 100 : 0;
+    h += `<tr><td class="txt"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(${COL_ESC[i]});margin-right:6px"></i><b>${f.pr.nombre}</b></td><td>${fmt(f.total)}</td><td>${i ? signo(d, 0) + " %" : "—"}</td><td>${fmt(f.med[f.ip])}</td><td>${sem(f.semanas[f.ip])}</td><td>${f.epi} de ${R.H}</td><td>${fmt(f.ped)}</td></tr>`; });
+  $("#tab-esc").innerHTML = h + "</tbody>";
+}
+function guardarEscenarios() {
+  if (!escRes) return;
+  const R = escRes;
+  let n = guardados.reduce((a, g) => Math.max(a, g.n), 0);
+  const nuevos = R.filas.map(f => { n++;
+    const en = ensoEn(R.origen);
+    return {id: Date.now() + "-" + n, n, guardado: new Date().toLocaleString("es-PE"), enf: R.enf, prov: R.prov, arq: R.arq,
+      desde: sem(R.origen) + (R.sim > 0 ? " (sim.)" : ""), H: R.H, titulo: `${R.prov} · ${f.pr.nombre}`,
+      escenario: `${f.pr.nombre}: temperatura ${signo(f.e.dT, 1)} °C, lluvia ${f.e.ll} %, Niño 1+2 ${signo(en[0] + f.e.dN, 2)} °C, ONI ${signo(en[1] + f.e.dO, 2)}, aplicado a ${f.e.K} semanas`,
+      semanas: f.semanas.map(sem), med: f.med.map(v => Math.round(v * 10) / 10), lo: f.lo.map(Math.round), hi: f.hi.map(Math.round),
+      total: Math.round(f.total), pico: Math.round(f.med[f.ip]), pedido: `${fmt(f.ped)} tratamientos`}; });
+  verGuardado.clear();
+  nuevos.forEach(g => verGuardado.add(g.id));
+  guardados = nuevos.reverse().concat(guardados).slice(0, 36);
+  escribir("grupo5_pronosticos_v1", guardados);
+  avisar("Los 6 escenarios quedaron guardados"); pintarGuardados(); pintarComparacion(); pintarGrafico();
+}
+
+// ---------------- confiabilidad ----------------
+function pintarConfiabilidad() {
+  const m = D.metricas[est.enf], mods = Object.keys(m);
+  let h = `<thead><tr><th>Modelo</th>${[1, 2, 3, 4, 5, 6, 7, 8].map(x => `<th>${x} ${x === 1 ? "semana" : "semanas"}</th>`).join("")}</tr></thead><tbody>`;
+  mods.forEach(k => { h += `<tr><td class="txt"><b>${k}</b></td>${m[k].map((v, j) => { const mejor = Math.min(...mods.map(x => m[x][j])); return `<td${v === mejor ? ' style="color:var(--accent-2);font-weight:600"' : ""}>${fmt(v, 1)}</td>`; }).join("")}</tr>`; });
+  $("#tab-conf").innerHTML = h + "</tbody>";
+  const p8 = m["Persistencia"][7], best = Math.min(...mods.filter(x => x !== "Persistencia").map(x => m[x][7]));
+  $("#nota-conf").textContent = `${est.enf === "dengue" ? "Dengue" : "EDA en menores de 5 años"}: con 8 semanas de anticipación las redes bajan el error de ${fmt(p8, 1)} a ${fmt(best, 1)} casos por semana frente a repetir la última semana (persistencia). En color, el menor error de cada columna.`;
+}
+
+// ---------------- controles ----------------
+const PRESETS = [
+  {nombre: "Normal", dT: 0, ll: 100},
+  {nombre: "Verano más caluroso", dT: 1.5, ll: 100},
+  {nombre: "Lluvias intensas", dT: 0.5, ll: 250},
+  {nombre: "Niño costero moderado", dT: 1, ll: 180, n12: 1.5, oni: 0.8},
+  {nombre: "Niño costero fuerte", dT: 2, ll: 300, n12: 3, oni: 1.25},
+  {nombre: "Año frío (La Niña)", dT: -1, ll: 60, n12: -1.25, oni: -1}];
+function aplicarPreset(pr) {
+  const en = enso();
+  est.esc = {dT: pr.dT, ll: pr.ll, dN: pr.n12 === undefined ? 0 : pr.n12 - en[0], dO: pr.oni === undefined ? 0 : pr.oni - en[1], K: est.esc.K, nombre: pr.nombre};
+  pintarControles(); programar(0);
+}
+function elegirProv(v) { est.prov = v; pintarControles(); pintarTodo(); guardarAjustes(); document.getElementById("pronostico").scrollIntoView({behavior: "smooth", block: "start"}); }
+function cambioEsc(campo, valor) { est.esc[campo] = valor; est.esc.nombre = "Personalizado"; pintarControles(); programar(); }
+
+function iniciar() {
+  pintarCabecera();
+  $("#sel-prov").innerHTML = `<option value="todas">Costa norte (las 14)</option>` +
+    ["Tumbes", "Piura", "Lambayeque"].map(dep => `<optgroup label="${dep}">` + P.filter(p => p.dep === dep).map(p => `<option value="${p.idx}">${p.nombre}</option>`).join("") + "</optgroup>").join("");
+  $("#sel-anio").innerHTML = [...new Set(CAL.ano.slice(L - 1, NS))].reverse().map(a => `<option value="${a}">${a}</option>`).join("");
+  $("#presets").innerHTML = PRESETS.map(p => `<button type="button" class="chip" data-n="${p.nombre}">${p.nombre}</button>`).join("");
+  document.querySelectorAll("#presets .chip").forEach(c => c.addEventListener("click", () => aplicarPreset(PRESETS.find(p => p.nombre === c.dataset.n))));
+  const seg = (id, fn) => document.querySelectorAll(`#${id} button`).forEach(b => b.addEventListener("click", () => fn(b.dataset.v)));
+  seg("seg-enf", v => { if (auto) return; est.enf = v; if (est.modo === "ultimo") est.origen = FIN(); pintarControles(); pintarConfiabilidad(); programar(0); });
+  seg("seg-arq", v => { est.arq = v; pintarControles(); programar(0); });
+  seg("seg-origen", v => { if (auto) return; est.modo = v; if (v === "ultimo") est.origen = FIN(); else if (est.origen >= ULT) est.origen = indiceDe(2023, 6); pintarControles(); programar(0); });
+  $("#sel-prov").addEventListener("change", e => elegirProv(e.target.value === "todas" ? "todas" : +e.target.value));
+  $("#sel-anio").addEventListener("change", () => { llenarSemanas(); est.origen = indiceDe(+$("#sel-anio").value, +$("#sel-sem").value); pintarControles(); programar(0); });
+  $("#sel-sem").addEventListener("change", () => { est.origen = indiceDe(+$("#sel-anio").value, +$("#sel-sem").value); pintarControles(); programar(0); });
+  $("#rng-h").addEventListener("input", e => { est.H = +e.target.value; pintarControles(); programar(); });
+  $("#rng-dt").addEventListener("input", e => cambioEsc("dT", +e.target.value));
+  $("#rng-ll").addEventListener("input", e => cambioEsc("ll", +e.target.value));
+  $("#rng-n12").addEventListener("input", e => cambioEsc("dN", +e.target.value - enso()[0]));
+  $("#rng-oni").addEventListener("input", e => cambioEsc("dO", +e.target.value - enso()[1]));
+  $("#sel-k").addEventListener("change", e => { est.esc.K = +e.target.value; programar(0); });
+  $("#btn-reset").addEventListener("click", () => { est.esc = {...ESC0, K: est.esc.K}; pintarControles(); programar(0); });
+  $("#btn-reset-ed").addEventListener("click", () => { if (est.prov !== "todas") delete ediciones[est.enf][P[est.prov].id]; guardarSim(); programar(0); });
+  $("#rng-lead").addEventListener("input", e => { est.lead = +e.target.value; pintarControles(); if (res) pintarPedido(); guardarAjustes(); });
+  $("#sel-z").addEventListener("change", e => { est.z = +e.target.value; if (res) pintarPedido(); guardarAjustes(); });
+  $("#btn-guardar").addEventListener("click", () => { if (res) guardar(); });
+  $("#btn-copiar-semanas").addEventListener("click", () => { if (res) copiar(tsvSemanas(), "Tabla semanal"); });
+  $("#btn-copiar-guardados").addEventListener("click", () => guardados.length ? copiar(tsvGuardados(), "Pronósticos guardados") : avisar("No hay pronósticos guardados"));
+  const borrar = $("#btn-borrar");
+  borrar.addEventListener("click", () => {
+    if (borrar.dataset.confirmar) { guardados = []; verGuardado.clear(); escribir("grupo5_pronosticos_v1", guardados); delete borrar.dataset.confirmar; borrar.textContent = "Borrar todos"; pintarGuardados(); pintarGrafico(); pintarComparacion(); return; }
+    borrar.dataset.confirmar = "1"; borrar.textContent = "¿Seguro? Pulsa otra vez";
+    setTimeout(() => { delete borrar.dataset.confirmar; borrar.textContent = "Borrar todos"; }, 4000);
+  });
+  $("#btn-av1").addEventListener("click", () => { if (avanzar(1)) recalcular(); });
+  $("#btn-av4").addEventListener("click", () => { if (avanzar(4)) recalcular(); });
+  $("#btn-avh").addEventListener("click", () => { if (avanzar(est.H)) recalcular(); });
+  $("#btn-auto").addEventListener("click", alternarAuto);
+  $("#btn-deshacer").addEventListener("click", deshacer);
+  const rein = $("#btn-reiniciar");
+  rein.addEventListener("click", () => {
+    if (rein.dataset.confirmar) { delete rein.dataset.confirmar; rein.textContent = "Volver al dato real"; reiniciarSim(); return; }
+    rein.dataset.confirmar = "1"; rein.textContent = "¿Seguro? Pulsa otra vez";
+    setTimeout(() => { delete rein.dataset.confirmar; rein.textContent = "Volver al dato real"; }, 4000);
+  });
+  $("#btn-copiar-sim").addEventListener("click", () => copiar(tsvSim(), "Historial simulado"));
+  $("#btn-copiar-comp").addEventListener("click", () => copiar(tsvComparacion(), "Comparación"));
+  $("#btn-esc").addEventListener("click", compararEscenarios);
+  $("#btn-esc-guardar").addEventListener("click", guardarEscenarios);
+  const enlaces = [...document.querySelectorAll("nav.pestanas a")];
+  const obs = new IntersectionObserver(ents => ents.forEach(en => { if (en.isIntersecting) enlaces.forEach(a => a.classList.toggle("activo", a.getAttribute("href") === "#" + en.target.id)); }), {rootMargin: "-40% 0px -55% 0px"});
+  document.querySelectorAll("main section").forEach(s => obs.observe(s));
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (res) { pintarTodo(); pintarEscenarios(); } });
+  new MutationObserver(() => { if (res) pintarTodo(); }).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
+  pintarControles(); pintarConfiabilidad(); pintarGuardados();
+  recalcular();
+}
+window.__app = {est, ext, pronosticarProv, resultadoSel, recalcular, aplicarPreset, PRESETS, avanzar, deshacer, reiniciarSim, compararEscenarios, FIN, ULT};
+if (window.Chart) iniciar(); else window.addEventListener("load", iniciar);
+})();
+</script>

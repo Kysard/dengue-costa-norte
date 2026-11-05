@@ -1,0 +1,18 @@
+\begin{tikzpicture}[font=\scriptsize, node distance=2.5mm and 3.5mm,
+  caja/.style={draw, rounded corners=2pt, align=center, inner sep=2.5pt, fill=#1!10},
+  caja/.default=gray, flecha/.style={-{Stealth[length=3.5pt]}, semithick}]
+\node[caja=blue, text width=1.75cm] (x) {Ventana de 26 sem.: casos, estación, clima, El Niño};
+\node[caja=blue, below=of x, text width=1.75cm] (p) {Provincia $p$ (\textit{embedding})};
+\node[caja=green, right=4mm of $(x.east)!0.5!(p.east)$, text width=1.95cm] (enc) {\textbf{Codificador}\\[1pt] LSTM o GRU\\ (2 capas, 64)\\[1pt] o \textit{Transformer}\\ ($d$=64, 4 cabezas,\\ 2 capas)};
+\node[caja=orange, right=3.5mm of enc, text width=0.95cm] (lin) {Capa lineal\\ 8 salidas};
+\node[draw, circle, inner sep=0.8pt, right=2.5mm of lin] (suma) {$+$};
+\node[caja=red, right=2.5mm of suma] (y) {$\hat{y}_{t+1}$\\ $\vdots$\\ $\hat{y}_{t+8}$};
+\node[caja, below=4mm of $(lin.south)!0.5!(y.south)$, text width=2.6cm] (inv) {Política de stock base: pedido de cada semana};
+\draw[flecha] (x.east) -- (x.east -| enc.west);
+\draw[flecha] (p.east) -- (p.east -| enc.west);
+\draw[flecha] (enc) -- (lin);
+\draw[flecha] (lin) -- (suma);
+\draw[flecha] (suma) -- (y);
+\draw[flecha] (x.north) -- ++(0,3mm) -| (suma.north) node[pos=0.25, above, font=\tiny]{último valor $y_t$ (conexión residual)};
+\draw[flecha] (y.south) -- (y.south |- inv.north);
+\end{tikzpicture}

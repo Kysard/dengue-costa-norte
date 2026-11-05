@@ -1,0 +1,24 @@
+# Python y Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# Datos originales del CDC (más de 200 MB): se bajan con src/descargar_datos.py
+data/original/
+
+# Archivos temporales de LaTeX
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.bbl
+paper/*.blg
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini

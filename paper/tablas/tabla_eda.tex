@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering\caption{EDA en menores de 5 años: mismas métricas que la Tabla~\ref{tab:dengue}.}\label{tab:eda}
+\setlength{\tabcolsep}{2.3pt}\footnotesize
+\begin{tabular}{lccccc}
+\toprule
+Modelo & MAE val. & MAE & RMSE & MAE log & F1 \\
+\midrule
+Persistencia & 15.8 & 14.3 & 27.9 & 0.338 & 0.496 \\
+Canal endémico & 21.7 & 20.9 & 38.3 & 0.460 & 0.014 \\
+ARIMA + Fourier & 15.2 & 14.7 & 27.1 & 0.310 & \textbf{0.534} \\
+Random forest & \textbf{14.2} & 13.6 & 27.0 & \textbf{0.305} & 0.509{\tiny$\,\pm$0.003} \\
+\midrule
+LSTM & 15.5{\tiny$\,\pm$0.2} & 14.0{\tiny$\,\pm$0.3} & 26.0{\tiny$\,\pm$0.7} & 0.331{\tiny$\,\pm$0.005} & 0.489{\tiny$\,\pm$0.010} \\
+GRU & 15.2{\tiny$\,\pm$0.1} & \textbf{13.5{\tiny$\,\pm$0.3}} & \textbf{24.8{\tiny$\,\pm$0.8}} & 0.322{\tiny$\,\pm$0.005} & 0.487{\tiny$\,\pm$0.012} \\
+Transformer & 14.9{\tiny$\,\pm$0.4} & 13.8{\tiny$\,\pm$0.5} & 25.4{\tiny$\,\pm$0.5} & 0.318{\tiny$\,\pm$0.011} & 0.476{\tiny$\,\pm$0.032} \\
+\bottomrule
+\end{tabular}
+\end{table}

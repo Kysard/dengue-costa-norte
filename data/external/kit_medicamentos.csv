@@ -1,0 +1,13 @@
+enfermedad,grupo_clinico,variable_panel,medicamento,unidad,cantidad_por_caso,base_de_la_cantidad
+Dengue,Grupo A - sin signos de alarma (ambulatorio),dengue_ssa,Paracetamol 500 mg,tableta,20,"Supuesto del equipo: 1 tableta cada 6 h por 5 dias (tratamiento sintomatico de la fiebre)"
+Dengue,Grupo A - sin signos de alarma (ambulatorio),dengue_ssa,Sales de rehidratacion oral,sobre (1 L),5,"Supuesto del equipo: 1 sobre (1 L) por dia por 5 dias"
+Dengue,Grupo B2 - con signos de alarma (hospitalizado),dengue_csa,Cloruro de sodio 0.9% 1 L,bolsa,4,"Supuesto del equipo: hidratacion endovenosa con cristaloides por ~48 h"
+Dengue,Grupo B2 - con signos de alarma (hospitalizado),dengue_csa,Equipo de venoclisis,unidad,1,"Supuesto del equipo: 1 equipo por paciente hospitalizado"
+Dengue,Grupo B2 - con signos de alarma (hospitalizado),dengue_csa,Paracetamol 500 mg,tableta,12,"Supuesto del equipo: 1 tableta cada 6 h por 3 dias"
+Dengue,Grupo C - dengue grave,dengue_grave,Cloruro de sodio 0.9% 1 L,bolsa,8,"Supuesto del equipo: bolos de cristaloides y mantenimiento por ~72 h"
+Dengue,Grupo C - dengue grave,dengue_grave,Equipo de venoclisis,unidad,2,"Supuesto del equipo: 2 equipos por paciente grave"
+Dengue,Grupo C - dengue grave,dengue_grave,Paracetamol 500 mg,tableta,12,"Supuesto del equipo: 1 tableta cada 6 h por 3 dias"
+EDA,Episodio en menor de 5 anios,eda_men5,Sales de rehidratacion oral,sobre (1 L),3,"Supuesto del equipo: rehidratacion oral durante el episodio"
+EDA,Episodio en menor de 5 anios,eda_men5,Sulfato de zinc 20 mg,tableta,10,"OMS/UNICEF (2004): zinc por 10 a 14 dias; se toma el minimo"
+EDA,Episodio en mayor de 5 anios,eda_may5,Sales de rehidratacion oral,sobre (1 L),3,"Supuesto del equipo: rehidratacion oral durante el episodio"
+EDA,Episodio hospitalizado (todas las edades),eda_hosp,Cloruro de sodio 0.9% 1 L,bolsa,2,"Supuesto del equipo: rehidratacion endovenosa"
