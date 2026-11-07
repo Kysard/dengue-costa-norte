@@ -1,0 +1,12 @@
+# El despliegue en Vercel solo publica el aplicativo web (app/).
+# Todo lo de Python, notebooks, paper y resultados queda fuera del build.
+/.git/
+/paper/
+/notebooks/
+/results/
+/data/
+/src/
+/configs/
+/requirements.txt
+/.gitattributes
+/LICENSE

@@ -14,7 +14,8 @@ los medicamentos a tiempo. Usamos los datos abiertos del CDC Perú (2000-2025), 
 índices de El Niño de la NOAA, y comparamos una LSTM, una GRU y un Transformer contra métodos clásicos. Con el
 pronóstico simulamos el almacén de cada provincia con una política de stock base.
 
-**Aplicativo:** abrir **`app/index.html`** en Chrome o Edge (doble clic, funciona sin internet). Las redes
+**Aplicativo:** abrir **`app/index.html`** en Chrome o Edge (doble clic, funciona sin internet) o desplegarlo en
+Vercel (ver [Despliegue en Vercel](#despliegue-en-vercel)). Las redes
 entrenadas corren dentro del navegador: se elige provincia, modelo y de 1 a 26 semanas hacia adelante, se plantean
 escenarios de clima y El Niño, se pueden corregir los casos de las últimas semanas y cada pronóstico se guarda para
 compararlo semana a semana. Con «Avanzar en el tiempo» el pronóstico se agrega al historial como si ya hubiera pasado
@@ -158,6 +159,29 @@ cd paper && latexmk -pdf Equipo5_Paper.tex
   Una ventana se usa solo si sus 8 semanas objetivo caen en el mismo periodo; la estandarización usa solo el entrenamiento.
 - **Pesos:** `results/pesos/{objetivo}_{modelo}_s{semilla}.pt` (30 archivos, 7 MB). También se pueden bajar en un solo
   zip desde el release [`v1.0-final`](https://github.com/Kysard/dengue-costa-norte/releases/download/v1.0-final/pesos_grupo5.zip); descomprimirlo dentro de `results/pesos/`.
+
+## Despliegue en Vercel
+
+El aplicativo es **estático**: `app/index.html` ya trae el JavaScript de las redes, los pesos y los datos
+embebidos, así que no necesita backend ni Python en el servidor. El repositorio incluye un `vercel.json` que le
+dice a Vercel que publique la carpeta `app` como sitio estático y que no intente detectar un entrypoint de Python
+(por eso antes fallaba con `PYTHON_ENTRYPOINT_NOT_FOUND`).
+
+1. En [vercel.com/new](https://vercel.com/new), importar el repositorio `Kysard/dengue-costa-norte`.
+2. Framework Preset: **Other** (ya queda fijado en `vercel.json`). No hace falta Build Command, Output Directory
+   ni variables de entorno.
+3. Deploy. La aplicación queda en `https://<proyecto>.vercel.app` y se actualiza con cada push a `main`.
+
+También se puede desplegar desde la terminal:
+
+```bash
+npm i -g vercel
+vercel        # primera vez: vincula el proyecto
+vercel --prod # despliegue a producción
+```
+
+`vercel.json` fuerza el preset «Other» y `outputDirectory: "app"`; `.vercelignore` deja fuera del despliegue
+`src/`, `data/`, `results/`, `paper/` y `notebooks/`, que solo se usan para reproducir los experimentos.
 
 ## Hardware y costo
 
