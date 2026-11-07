@@ -14,8 +14,8 @@ los medicamentos a tiempo. Usamos los datos abiertos del CDC Perú (2000-2025), 
 índices de El Niño de la NOAA, y comparamos una LSTM, una GRU y un Transformer contra métodos clásicos. Con el
 pronóstico simulamos el almacén de cada provincia con una política de stock base.
 
-**Aplicativo:** abrir **`app/index.html`** en Chrome o Edge (doble clic, funciona sin internet) o desplegarlo en
-Vercel (ver [Despliegue en Vercel](#despliegue-en-vercel)). Las redes
+**Aplicativo:** abrir **`app/index.html`** en Chrome o Edge (doble clic, funciona sin internet) o usarlo en línea en
+**<https://dengue-costa-norte.vercel.app>**. Las redes
 entrenadas corren dentro del navegador: se elige provincia, modelo y de 1 a 26 semanas hacia adelante, se plantean
 escenarios de clima y El Niño, se pueden corregir los casos de las últimas semanas y cada pronóstico se guarda para
 compararlo semana a semana. Con «Avanzar en el tiempo» el pronóstico se agrega al historial como si ya hubiera pasado
